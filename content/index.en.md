@@ -1,8 +1,65 @@
 ---
-title: "AWS Workshop Template"
-weight: 0
+title: "Best Practices for Agentic AI with AgentCore in Financial Services"
+weight: 2
 ---
 
-# AWS WORKSHOP TEMPLATE
+Welcome to the Best Practices for Agentic AI with AgentCore in Financial Services workshop. 
 
-This template is the default for creating workshop content for AWS Solutions Architecture. It is driven by Markdown, and provides an interactive experience for workshop attendees. The pages in this template provide examples for how to write your own content using the components available.
+Building production-ready AI agents requires careful planning and execution across the entire development lifecycle. The difference between a prototype that impresses in a demo and an agent that delivers value in production is achieved through disciplined engineering practices, robust architecture, and continuous improvement.
+
+This workshop explores  essential best practices for building enterprise AI agents using Amazon Bedrock AgentCore. [Amazon Bedrock AgentCore](https://aws.amazon.com/bedrock/agentcore/) is an agentic platform that provides the services you need to create, deploy, and manage AI agents at scale. We cover everything from initial scoping to organizational scaling, with practical guidance that you can apply immediately.
+
+![Best Practices](/static/images/BestPractices-InANutshell.png)
+
+Amazon Bedrock AgentCore supports various interfaces for developing and deploying your agent code. At the lowest level, you can interact with the AgentCore APIs directly or through the [AWS SDKs](https://docs.aws.amazon.com/sdkref/latest/guide/overview.html) (such as [boto3](https://docs.aws.amazon.com/boto3/latest/reference/services/bedrock-agentcore.html)). For a simpler development experience, the [AgentCore Python SDK](https://github.com/aws/bedrock-agentcore-sdk-python) and [AgentCore Typescript SDK](https://github.com/aws/bedrock-agentcore-sdk-typescript) provide higher-level abstractions for integrating with AgentCore services like runtime, memory, and tools. The [AgentCore CLI](https://github.com/aws/agentcore-cli) builds on top of these, offering the best developer experience that lets you quickly scaffold, configure, and deploy agents. The AgentCore CLI is the easiest way to get started, and continues to be the best developer experience as you iterate on your agents. This workshop focuses on it.
+
+In this workshop, we will use AgentCore CLI.
+
+## What is the AgentCore CLI?
+
+AgentCore CLI is a Node.js command-line tool for creating, configuring, deploying, and managing agents on Amazon Bedrock AgentCore.
+
+The AgentCore CLI is an end-to-end developer tool that abstracts away infrastructure complexity, letting developers focus on agent logic while automating AWS resource provisioning, packaging, and deployment to a serverless runtime. It gives you the flexibility to build your agent using your preferred framework (whether that's [Strands Agents](https://strandsagents.com/), [LangGraph](https://www.langchain.com/langgraph), [CrewAI](https://crewai.com/), [Microsoft Autogen](https://microsoft.github.io/autogen/stable//index.html), [OpenAI Agents SDK](https://developers.openai.com/api/docs/guides/agents-sdk) or [Google ADK](https://google.github.io/adk-docs/)) and pair it with the AI model of your choice, including [Amazon Bedrock](https://aws.amazon.com/bedrock/), Anthropic Claude, Google Gemini, or OpenAI.
+
+Once your agent is ready, the CLI makes deployment seamless by integrating with Infrastructure as Code (IaC) tools like [AWS CDK](https://aws.amazon.com/cdk/), automatically handling everything from IAM roles and CloudWatch logging to packaging your code and provisioning a dedicated serverless endpoint — all without leaving your terminal. You can either run a simple `agentcore deploy` for a quick deployment, or follow a production-ready path that bootstraps your full AWS environment and synthesizes your infrastructure before pushing it live.
+
+Invoking your agent is as straightforward as running `agentcore invoke` with a JSON payload, which sends your prompt directly to the deployed serverless endpoint and returns the agent's response in real time, making the entire journey from development to production a smooth and unified experience.
+
+![AgentCore CLI Overview](/static/images/agentcore-cli-overview.png)
+
+### AgentCore Services Used in This Workshop
+
+| Service | Description |
+|---------|-------------|
+| **AgentCore Runtime** | Serverless execution environment for deployed agents |
+| **AgentCore Memory** | Persistent memory with semantic, summarization, and user preference strategies |
+| **AgentCore Gateway** | MCP-compatible proxy to centralize and secure tool access across agents |
+| **AgentCore Identity** | Secure credential management for API keys and OAuth providers |
+| **AgentCore Observability** | Tracing and monitoring via CloudWatch GenAI Observability |
+
+## What You'll Build
+
+In this hands-on workshop, you'll build a **Customer Support Agent** from prototype to production using the AgentCore CLI and [Kiro IDE](https://kiro.dev). This workshop demonstrates the full spectrum of AgentCore capabilities applied to the common use case of customer support.
+
+| Lab | Title | Time | What You'll Learn |
+|-----|-------|------|-------------------|
+| 1 | Create Agent Prototype | ~20 min | Scaffold a project, add custom tools, test locally |
+| 2 | Add Memory | ~20 min | Persistent memory across sessions with SEMANTIC and SUMMARIZATION strategies |
+| 3 | Scale with Gateway & Identity | ~30 min | Centralize tools via Lambda + AgentCore Gateway |
+| 4 | Production Observability | ~15 min | Session management, traces, and logs via CLI and CloudWatch |
+| 5 | Evaluate Agent Performance | ~15 min | Continuous quality monitoring with built-in evaluators |
+| 6 | Build Customer Interface | ~20 min | Streamlit chat frontend connected to your deployed agent |
+| 7 | Govern Agent Actions | ~20 min | Fine-grained Cedar policies to control tool access at the Gateway |
+
+### Architecture Overview
+
+At the end of this workshop you will have deployed the following infrastructure:
+
+![Workshop Architecture](/static/70-lab6-frontend/lab6_architecture_diagram.png)
+
+## Prerequisites
+
+Before starting, complete the setup instructions:
+
+- **At an AWS event?** → [At an AWS Event](./10-intro/11-at-aws/)
+- **Using your own account?** → [Self-Paced Setup](./10-intro/12-self-paced/)

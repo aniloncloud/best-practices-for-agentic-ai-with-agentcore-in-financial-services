@@ -1,10 +1,60 @@
+# We only support version 2.0.
 version: 2.0
 
+# Default locale code of the content ,formatted as languageCode-countryCode.
 defaultLocaleCode: en-US
+
+# A list of all of the supported locale codes, formatted as languageCode-countryCode.
 localeCodes:
   - en-US
 
-params:
-  hello: world
-  foo:
-    - bar
+awsAccountConfig:
+  accountSources:
+    - workshop_studio
+
+  participantRole:
+    iamPolicies: 
+      - static/iam_policy.json
+
+  # Defines a set of accessible and deployable regions for events leveraging this content.
+  regionConfiguration:
+    # The minimum number of regions an event operator must choose. Valid range: 1 to 3
+    minAccessibleRegions: 1
+
+    # The maximum number of regions an event operator can choose. Valid range: 1 to 3
+    maxAccessibleRegions: 1
+
+    # Regions defined under `accessibleRegions` are regions that can be made accessible to Participants.
+    # Note: No resources will be deployed to these regions by Workshop Studio.
+    # Note: Although all keys below are optional, you must define at least one of the three keys.
+    accessibleRegions:
+      # [OPTIONAL] Set of regions an event's provisioned account must have access to.
+      required:
+        - us-west-2
+
+      # [OPTIONAL] Set of regions that should be accessible by an event's provisioned account as a recommendation.
+      #recommended:
+      #  - us-west-2
+
+    # Set of regions where the configured CloudFormation templates will be deployed to.
+    # Note: Only 1 deployment regions is supported currently.
+    # Note: Although all keys below are optional, you must define at least one of the three keys.
+    # [OPTIONAL] if no CFTs are provided under `cloudformationTemplates`.
+    deployableRegions:
+      # [OPTIONAL] Set of regions an event's cloudformation templates should be deployed to.
+      # Note: Only 1 deployment regions is supported currently. Meaning no more than 1 region can be required.
+      required:
+        - us-west-2
+
+      #recommended:
+      #  - us-west-2
+
+infrastructure:
+  cloudformationTemplates:
+    # Transaction Log CFN
+    - templateLocation: static/workshop-resources.yaml
+      label: WorkshopResources
+    
+    # Workshop resources
+    - templateLocation: static/prereqs.yaml
+      label: WorkshopPreRequisites
