@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'CloudFormation template for Customer Support Workshop prerequisites — Cognito, Lambda warranty check, and SSM parameters'
+Description: 'CloudFormation template for Portfolio Advisor Workshop prerequisites — Cognito, Lambda functions, VPC, and SSM parameters'
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
@@ -14,17 +14,17 @@ Parameters:
 
   UserPoolName:
     Type: String
-    Default: 'CustomerSupportGatewayPool'
+    Default: 'PortfolioAdvisorGatewayPool'
     Description: 'Name of the Cognito User Pool'
   
   MachineAppClientName:
     Type: String
-    Default: 'CustomerSupportMachineClient'
+    Default: 'PortfolioAdvisorMachineClient'
     Description: 'Name of the Cognito User Pool Application Client'
   
   WebAppClientName:
     Type: String
-    Default: 'CustomerSupportWebClient'
+    Default: 'PortfolioAdvisorWebClient'
     Description: 'Name of the Cognito User Pool Web Application Client'
 
 Resources:
@@ -215,10 +215,10 @@ Resources:
               return event
 
   # ============================================================
-  # Warranty Check Lambda Function (used in Lab 3 — Gateway)
+  # Portfolio Risk Check Lambda Function (used in Lab 3 — Gateway)
   # ============================================================
 
-  WarrantyCheckLambdaRole:
+  PortfolioRiskLambdaRole:
     Type: AWS::IAM::Role
     Properties:
       RoleName: workshop-lambda-role
@@ -232,41 +232,98 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
 
-  WarrantyCheckFunction:
+  PortfolioRiskFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: workshop-warranty-check
+      FunctionName: workshop-check-portfolio-risk
       Runtime: python3.13
       Architectures:
         - arm64
       Handler: index.handler
-      Role: !GetAtt WarrantyCheckLambdaRole.Arn
+      Role: !GetAtt PortfolioRiskLambdaRole.Arn
       Timeout: 10
       Code:
         ZipFile: |
           import json
 
-          WARRANTIES = {
-              "PROD-001": {"product": "Wireless Headphones", "warranty_months": 12, "status": "active", "expires": "2027-03-01"},
-              "PROD-002": {"product": "Smart Watch", "warranty_months": 24, "status": "active", "expires": "2028-01-15"},
-              "PROD-003": {"product": "Laptop Stand", "warranty_months": 6, "status": "expired", "expires": "2026-01-01"},
-              "PROD-004": {"product": "USB-C Hub", "warranty_months": 12, "status": "active", "expires": "2027-06-20"},
+          PORTFOLIOS = {
+              "PORT-001": {
+                  "name": "Conservative Income",
+                  "strategy": "conservative",
+                  "total_value": 500000,
+                  "risk_score": 2.1,
+                  "holdings": {"UNH": 21, "V": 20, "JPM": 17, "BRK-B": 22, "MSFT": 9, "CASH": 11},
+                  "diversification_rating": "Excellent",
+                  "recommendation": "Well-diversified with strong income focus. Consider rebalancing CASH into short-term bonds for yield.",
+              },
+              "PORT-002": {
+                  "name": "Growth Technology",
+                  "strategy": "aggressive",
+                  "total_value": 750000,
+                  "risk_score": 7.8,
+                  "holdings": {"AAPL": 13, "MSFT": 23, "AMZN": 15, "TSLA": 27, "GOOG": 16, "CASH": 6},
+                  "diversification_rating": "Poor",
+                  "recommendation": "Heavy technology concentration (94%). High risk due to TSLA overweight at 27%. Reduce TSLA to 15% and add Financials/Healthcare.",
+              },
+              "PORT-003": {
+                  "name": "Balanced Moderate",
+                  "strategy": "moderate",
+                  "total_value": 1000000,
+                  "risk_score": 4.5,
+                  "holdings": {"AAPL": 6, "MSFT": 11, "JPM": 11, "V": 12, "UNH": 16, "GS": 10, "GOOG": 6, "BRK-B": 13, "CASH": 15},
+                  "diversification_rating": "Good",
+                  "recommendation": "Well-balanced across sectors. Cash at 15% is slightly high. Deploy 5% into dividend equities for income.",
+              },
+              "PORT-004": {
+                  "name": "High-Yield Dividend",
+                  "strategy": "conservative",
+                  "total_value": 300000,
+                  "risk_score": 3.2,
+                  "holdings": {"JPM": 22, "GS": 16, "V": 19, "UNH": 26, "BRK-B": 14, "CASH": 3},
+                  "diversification_rating": "Good",
+                  "recommendation": "Strong dividend focus. Low cash reserves at 3%. Maintain 5-10% cash for rebalancing opportunities.",
+              },
+              "PORT-005": {
+                  "name": "Speculative Growth",
+                  "strategy": "aggressive",
+                  "total_value": 200000,
+                  "risk_score": 9.1,
+                  "holdings": {"TSLA": 62, "AMZN": 28, "CASH": 10},
+                  "diversification_rating": "Very Poor",
+                  "recommendation": "CRITICAL: Extreme concentration risk. 62% in single high-volatility stock (TSLA). Immediate rebalancing required. Max single-position should not exceed 25%.",
+              },
           }
 
           def handler(event, context):
-              product_id = event.get("product_id", "").upper()
-              if product_id in WARRANTIES:
-                  return {"statusCode": 200, "body": json.dumps(WARRANTIES[product_id])}
-              return {"statusCode": 404, "body": json.dumps({"error": f"No warranty found for {product_id}"})}
+              portfolio_id = event.get("portfolio_id", "").upper()
+              if portfolio_id in PORTFOLIOS:
+                  portfolio = PORTFOLIOS[portfolio_id]
+                  return {
+                      "statusCode": 200,
+                      "body": json.dumps({
+                          "portfolio_id": portfolio_id,
+                          "name": portfolio["name"],
+                          "strategy": portfolio["strategy"],
+                          "total_value": portfolio["total_value"],
+                          "risk_score": portfolio["risk_score"],
+                          "holdings_pct": portfolio["holdings"],
+                          "diversification_rating": portfolio["diversification_rating"],
+                          "recommendation": portfolio["recommendation"],
+                      }),
+                  }
+              return {
+                  "statusCode": 404,
+                  "body": json.dumps({"error": f"No portfolio found for {portfolio_id}"}),
+              }
 
   # ============================================================
-  # Refund Processing Lambda Function (used in Lab 7 — Policies)
+  # Execute Trade Lambda Function (used in Lab 7 — Policies)
   # ============================================================
 
-  RefundLambdaRole:
+  ExecuteTradeLambdaRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: workshop-refund-lambda-role
+      RoleName: workshop-trade-lambda-role
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -277,34 +334,90 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
 
-  RefundFunction:
+  ExecuteTradeFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: workshop-process-refund
+      FunctionName: workshop-execute-trade
       Runtime: python3.13
       Architectures:
         - arm64
       Handler: index.handler
-      Role: !GetAtt RefundLambdaRole.Arn
+      Role: !GetAtt ExecuteTradeLambdaRole.Arn
       Timeout: 10
       Code:
         ZipFile: |
           import json
 
+          KNOWN_TICKERS = [
+              "AAPL", "MSFT", "JPM", "GS", "AMZN", "V", "UNH", "TSLA", "BRK-B", "GOOG",
+          ]
+
+          RESTRICTED_TICKERS = ["RESTRICTED-001", "RESTRICTED-002"]
+
           def handler(event, context):
-              amount = event.get("amount", 0)
-              order_id = event.get("order_id", "unknown")
-              reason = event.get("reason", "not specified")
+              ticker = event.get("ticker", "").upper()
+              quantity = event.get("quantity", 0)
+              order_type = event.get("order_type", "market").lower()
+              reason = event.get("reason", "")
+
+              if ticker in RESTRICTED_TICKERS:
+                  return {
+                      "statusCode": 403,
+                      "body": json.dumps({
+                          "status": "rejected",
+                          "ticker": ticker,
+                          "reason": "Trading restricted for this security. Contact compliance for details.",
+                      }),
+                  }
+
+              if ticker not in KNOWN_TICKERS:
+                  return {
+                      "statusCode": 404,
+                      "body": json.dumps({
+                          "status": "rejected",
+                          "ticker": ticker,
+                          "reason": f"Unknown ticker symbol '{ticker}'. Please verify and try again.",
+                      }),
+                  }
+
+              if quantity > 10000:
+                  return {
+                      "statusCode": 400,
+                      "body": json.dumps({
+                          "status": "rejected",
+                          "ticker": ticker,
+                          "quantity": quantity,
+                          "reason": "Order quantity exceeds maximum allowed (10,000 shares).",
+                      }),
+                  }
+
+              if order_type == "limit":
+                  return {
+                      "statusCode": 200,
+                      "body": json.dumps({
+                          "status": "pending",
+                          "ticker": ticker,
+                          "quantity": quantity,
+                          "order_type": "limit",
+                          "reason": reason,
+                          "message": "Limit order placed — awaiting price match.",
+                          "settlement": "T+1 after execution",
+                          "order_id": f"ORD-LMT-{ticker}-{quantity}",
+                      }),
+                  }
 
               return {
                   "statusCode": 200,
                   "body": json.dumps({
-                      "status": "approved",
-                      "order_id": order_id,
-                      "refund_amount": amount,
+                      "status": "confirmed",
+                      "ticker": ticker,
+                      "quantity": quantity,
+                      "order_type": "market",
                       "reason": reason,
-                      "message": f"Refund of ${amount} for order {order_id} processed successfully"
-                  })
+                      "message": "Trade executed successfully.",
+                      "settlement": "T+1",
+                      "order_id": f"ORD-MKT-{ticker}-{quantity}",
+                  }),
               }
 
   # ============================================================
@@ -314,37 +427,37 @@ Resources:
   CognitoMachineClientIdParameter:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: /app/customersupport/agentcore/client_id
+      Name: /app/portfolioadvisor/agentcore/client_id
       Type: String
       Value: !Ref MachineUserPoolClient
       Description: Machine Cognito client ID
       Tags:
-        Application: CustomerSupport
+        Application: PortfolioAdvisor
   
   CognitoWebClientIdParameter:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: /app/customersupport/agentcore/web_client_id
+      Name: /app/portfolioadvisor/agentcore/web_client_id
       Type: String
       Value: !Ref WebUserPoolClient
       Description: Cognito client ID for web app
       Tags:
-        Application: CustomerSupport
+        Application: PortfolioAdvisor
 
   UserPoolIdParameter:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: /app/customersupport/agentcore/pool_id
+      Name: /app/portfolioadvisor/agentcore/pool_id
       Type: String
       Value: !Ref UserPool
       Description: Cognito client ID
       Tags:
-        Application: CustomerSupport
+        Application: PortfolioAdvisor
   
   CognitoAuthScopeParameter:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: /app/customersupport/agentcore/cognito_auth_scope
+      Name: /app/portfolioadvisor/agentcore/cognito_auth_scope
       Type: String
       Value: !Join
         - ''
@@ -353,22 +466,22 @@ Resources:
           - '/read'
       Description: OAuth2 scope for Cognito auth
       Tags:
-        Application: CustomerSupport
+        Application: PortfolioAdvisor
 
   CognitoDiscoveryURLParameter:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: /app/customersupport/agentcore/cognito_discovery_url
+      Name: /app/portfolioadvisor/agentcore/cognito_discovery_url
       Type: String
       Value: !Sub 'https://cognito-idp.${AWS::Region}.amazonaws.com/${UserPool}/.well-known/openid-configuration'
       Description: OAuth2 Discovery URL
       Tags:
-        Application: CustomerSupport
+        Application: PortfolioAdvisor
 
   CognitoTokenURLParameter:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: /app/customersupport/agentcore/cognito_token_url
+      Name: /app/portfolioadvisor/agentcore/cognito_token_url
       Type: String
       Value: !Join
         - ''
@@ -377,12 +490,12 @@ Resources:
           - !Sub '.auth.${AWS::Region}.amazoncognito.com/oauth2/token'
       Description: OAuth2 Token URL
       Tags:
-        Application: CustomerSupport
+        Application: PortfolioAdvisor
 
   CognitoAuthorizeURLParameter:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: /app/customersupport/agentcore/cognito_auth_url
+      Name: /app/portfolioadvisor/agentcore/cognito_auth_url
       Type: String
       Value: !Join
         - ''
@@ -391,12 +504,12 @@ Resources:
           - !Sub '.auth.${AWS::Region}.amazoncognito.com/oauth2/authorize'
       Description: OAuth2 Token URL
       Tags:
-        Application: CustomerSupport
+        Application: PortfolioAdvisor
 
   CognitoDomainParameter:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: /app/customersupport/agentcore/cognito_domain
+      Name: /app/portfolioadvisor/agentcore/cognito_domain
       Type: String
       Value: !Join
         - ''
@@ -405,32 +518,324 @@ Resources:
           - !Sub '.auth.${AWS::Region}.amazoncognito.com'
       Description: Cognito hosted domain for OAuth2
       Tags:
-        Application: CustomerSupport
+        Application: PortfolioAdvisor
 
   # ============================================================
-  # SSM Parameter — Warranty Check Lambda ARN (used in Lab 3)
+  # SSM Parameter — Portfolio Risk Lambda ARN (used in Lab 3)
   # ============================================================
 
-  WarrantyCheckLambdaArnParameter:
+  PortfolioRiskLambdaArnParameter:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: /app/customersupport/agentcore/warranty_check_lambda_arn
+      Name: /app/portfolioadvisor/agentcore/portfolio_risk_lambda_arn
       Type: String
-      Value: !GetAtt WarrantyCheckFunction.Arn
-      Description: ARN of the warranty check Lambda function for AgentCore Gateway
+      Value: !GetAtt PortfolioRiskFunction.Arn
+      Description: ARN of the portfolio risk check Lambda function for AgentCore Gateway
       Tags:
-        Application: CustomerSupport
+        Application: PortfolioAdvisor
 
   # ============================================================
-  # SSM Parameter — Refund Lambda ARN (used in Lab 7)
+  # SSM Parameter — Execute Trade Lambda ARN (used in Lab 7)
   # ============================================================
 
-  RefundLambdaArnParameter:
+  ExecuteTradeLambdaArnParameter:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: /app/customersupport/agentcore/refund_lambda_arn
+      Name: /app/portfolioadvisor/agentcore/execute_trade_lambda_arn
       Type: String
-      Value: !GetAtt RefundFunction.Arn
-      Description: ARN of the refund processing Lambda function for AgentCore Gateway
+      Value: !GetAtt ExecuteTradeFunction.Arn
+      Description: ARN of the execute trade Lambda function for AgentCore Gateway
       Tags:
-        Application: CustomerSupport
+        Application: PortfolioAdvisor
+
+  # ============================================================
+  # VPC Resources (used in Lab 8 — VPC Integration)
+  # ============================================================
+
+  WorkshopVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: PortfolioAdvisor-VPC
+        - Key: Application
+          Value: PortfolioAdvisor
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: PortfolioAdvisor-IGW
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref WorkshopVPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref WorkshopVPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: PortfolioAdvisor-Public-1
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref WorkshopVPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: PortfolioAdvisor-Public-2
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref WorkshopVPC
+      CidrBlock: 10.0.10.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: PortfolioAdvisor-Private-1
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref WorkshopVPC
+      CidrBlock: 10.0.11.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: PortfolioAdvisor-Private-2
+
+  NatEIP:
+    Type: AWS::EC2::EIP
+    DependsOn: AttachGateway
+    Properties:
+      Domain: vpc
+
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatEIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: PortfolioAdvisor-NAT
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref WorkshopVPC
+      Tags:
+        - Key: Name
+          Value: PortfolioAdvisor-Public-RT
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RTAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnet2RTAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref WorkshopVPC
+      Tags:
+        - Key: Name
+          Value: PortfolioAdvisor-Private-RT
+
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
+
+  PrivateSubnet1RTAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnet2RTAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable
+
+  AgentCoreSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for AgentCore VPC mode
+      VpcId: !Ref WorkshopVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 10.0.0.0/16
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: PortfolioAdvisor-AgentCore-SG
+
+  # VPC Endpoints for private connectivity
+  AgentCoreVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref WorkshopVPC
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.bedrock-agentcore'
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: true
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      SecurityGroupIds:
+        - !Ref AgentCoreSecurityGroup
+
+  AgentCoreGatewayVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref WorkshopVPC
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.bedrock-agentcore.gateway'
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: true
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      SecurityGroupIds:
+        - !Ref AgentCoreSecurityGroup
+
+  BedrockRuntimeVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref WorkshopVPC
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.bedrock-runtime'
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: true
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      SecurityGroupIds:
+        - !Ref AgentCoreSecurityGroup
+
+  S3GatewayEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref WorkshopVPC
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.s3'
+      VpcEndpointType: Gateway
+      RouteTableIds:
+        - !Ref PrivateRouteTable
+
+  CloudWatchLogsVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref WorkshopVPC
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.logs'
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: true
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      SecurityGroupIds:
+        - !Ref AgentCoreSecurityGroup
+
+  ECRApiVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref WorkshopVPC
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ecr.api'
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: true
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      SecurityGroupIds:
+        - !Ref AgentCoreSecurityGroup
+
+  ECRDkrVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref WorkshopVPC
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ecr.dkr'
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: true
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      SecurityGroupIds:
+        - !Ref AgentCoreSecurityGroup
+
+  # ============================================================
+  # SSM Parameters — VPC (used in Lab 8)
+  # ============================================================
+
+  VpcIdParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /app/portfolioadvisor/agentcore/vpc_id
+      Type: String
+      Value: !Ref WorkshopVPC
+      Description: VPC ID for AgentCore VPC mode
+      Tags:
+        Application: PortfolioAdvisor
+
+  PrivateSubnet1Parameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /app/portfolioadvisor/agentcore/private_subnet_1
+      Type: String
+      Value: !Ref PrivateSubnet1
+      Description: Private subnet 1 for AgentCore VPC mode
+      Tags:
+        Application: PortfolioAdvisor
+
+  PrivateSubnet2Parameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /app/portfolioadvisor/agentcore/private_subnet_2
+      Type: String
+      Value: !Ref PrivateSubnet2
+      Description: Private subnet 2 for AgentCore VPC mode
+      Tags:
+        Application: PortfolioAdvisor
+
+  SecurityGroupIdParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /app/portfolioadvisor/agentcore/security_group_id
+      Type: String
+      Value: !GetAtt AgentCoreSecurityGroup.GroupId
+      Description: Security group ID for AgentCore VPC mode
+      Tags:
+        Application: PortfolioAdvisor

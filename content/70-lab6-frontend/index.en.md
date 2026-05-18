@@ -1,5 +1,5 @@
 ---
-title: "Lab 6: Building the web chat Interface"
+title: "Lab 7: Build Client Portal Interface"
 weight: 72
 ---
 
@@ -7,23 +7,23 @@ weight: 72
 
 ## Overview
 
-Your agent is deployed, monitored, and evaluated — but users need a way to interact with it. In this lab, you'll build a web chat interface using Flask that connects to your deployed AgentCore Runtime. Users authenticate via Cognito's hosted login page before accessing the chat.
+Your agent is deployed, monitored, and evaluated — but clients need a way to interact with it. In this lab, you'll build a web chat interface using Flask that connects to your deployed AgentCore Runtime. Clients authenticate via Cognito's hosted login page before accessing the portfolio advisor chat.
 
 ### What You'll Build
 
 - A login page that redirects to Cognito's hosted UI for authentication
 - A chat interface with a Flask backend
 - Automatic agent discovery from your deployment state
-- User authentication via Cognito authorization code flow
+- Client authentication via Cognito authorization code flow
 - Session management for persistent conversations
-- Quick action buttons for common queries
+- Quick action buttons for common portfolio advisor queries
 
 ## Step 1: Install Dependencies
 
 In Kiro's terminal, add Flask, boto3, and requests to your project:
 
 :::code{language=bash}
-cd app/CustomerSupport
+cd app/PortfolioAdvisor
 uv add flask boto3 requests
 cd ../..
 
@@ -31,7 +31,7 @@ cd ../..
 
 ## Step 2: Allow the Web Client in Your Runtime and Gateway
 
-In Lab 4, you configured the runtime and gateway to accept tokens from the M2M Cognito client. The frontend uses a different Cognito client (the web client, which supports the authorization code flow for user login). You need to add its client ID to the `allowedClients` list.
+In Lab 5, you configured the runtime and gateway to accept tokens from the M2M Cognito client. The frontend uses a different Cognito client (the web client, which supports the authorization code flow for user login). You need to add its client ID to the `allowedClients` list.
 
 Retrieve the web client ID:
 
@@ -39,7 +39,7 @@ Retrieve the web client ID:
 :::tab{label="macOS/Linux"}
 ```bash
 WEB_CLIENT_ID=$(aws ssm get-parameter \
-  --name /app/customersupport/agentcore/web_client_id \
+  --name /app/portfolioadvisor/agentcore/web_client_id \
   --query 'Parameter.Value' --output text)
 echo "Web Client ID: $WEB_CLIENT_ID"
 ```
@@ -47,7 +47,7 @@ echo "Web Client ID: $WEB_CLIENT_ID"
 :::tab{label="Windows"}
 ```powershell
 $WEB_CLIENT_ID = aws ssm get-parameter `
-  --name /app/customersupport/agentcore/web_client_id `
+  --name /app/portfolioadvisor/agentcore/web_client_id `
   --query 'Parameter.Value' --output text
 Write-Host "Web Client ID: $WEB_CLIENT_ID"
 
@@ -64,6 +64,8 @@ Open `agentcore/agentcore.json` in Kiro's editor. Find both `allowedClients` arr
 ]
 :::
 
+> **Note:** No CLI flag exists for `allowedClients` — this minimal `agentcore.json` edit is required (same pattern as `authorizerConfiguration` in Lab 5).
+
 Then validate and deploy:
 
 :::code{language=bash}
@@ -78,22 +80,22 @@ Create the frontend directory and files:
 ::::tabs{variant="container" groupId="os"}
 :::tab{label="macOS/Linux"}
 ```bash
-mkdir -p app/CustomerSupport/frontend/templates
-touch app/CustomerSupport/frontend/__init__.py
-touch app/CustomerSupport/frontend/frontend.py
+mkdir -p app/PortfolioAdvisor/frontend/templates
+touch app/PortfolioAdvisor/frontend/__init__.py
+touch app/PortfolioAdvisor/frontend/frontend.py
 ```
 :::
 :::tab{label="Windows"}
 ```powershell
-mkdir app\CustomerSupport\frontend\templates
-New-Item app\CustomerSupport\frontend\__init__.py -Force
-New-Item app\CustomerSupport\frontend\frontend.py -Force
+mkdir app\PortfolioAdvisor\frontend\templates
+New-Item app\PortfolioAdvisor\frontend\__init__.py -Force
+New-Item app\PortfolioAdvisor\frontend\frontend.py -Force
 
 ```
 :::
 ::::
 
-Create `app/CustomerSupport/frontend/frontend.py` in Kiro's editor. This Flask server handles Cognito login (authorization code flow), serves the chat UI, and proxies requests to AgentCore Runtime using the user's JWT token.
+Create `app/PortfolioAdvisor/frontend/frontend.py` in Kiro's editor. This Flask server handles Cognito login (authorization code flow), serves the chat UI, and proxies requests to AgentCore Runtime using the user's JWT token.
 
 > **Why not boto3?** The `invoke_agent_runtime` API with JWT bearer tokens is not supported by boto3. Instead, we use the `requests` library to call the AgentCore REST API directly with an `Authorization: Bearer` header, as recommended in the [AWS documentation](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-oauth.html).
 
@@ -115,7 +117,7 @@ import requests as http_requests
 app = Flask(__name__)
 app.secret_key = uuid.uuid4().hex
 
-REGION = boto3.session.Session().region_name or "us-east-1"
+REGION = boto3.session.Session().region_name or "us-west-2"
 ssm_client = boto3.client("ssm", region_name=REGION)
 AGENTCORE_ENDPOINT = f"https://bedrock-agentcore.{REGION}.amazonaws.com"
 CALLBACK_URL = "http://localhost:8501/"
@@ -126,7 +128,7 @@ def get_runtime_arn():
     try:
         state = json.loads(state_file.read_text())
         runtimes = state.get("targets", {}).get("default", {}).get("resources", {}).get("runtimes", {})
-        return runtimes.get("CustomerSupport", {}).get("runtimeArn", None)
+        return runtimes.get("PortfolioAdvisor", {}).get("runtimeArn", None)
     except Exception:
         pass
     return None
@@ -138,10 +140,10 @@ def get_ssm_param(name):
 
 def load_cognito_config():
     return {
-        "domain": get_ssm_param("/app/customersupport/agentcore/cognito_domain"),
-        "web_client_id": get_ssm_param("/app/customersupport/agentcore/web_client_id"),
-        "token_url": get_ssm_param("/app/customersupport/agentcore/cognito_token_url"),
-        "auth_scope": get_ssm_param("/app/customersupport/agentcore/cognito_auth_scope"),
+        "domain": get_ssm_param("/app/portfolioadvisor/agentcore/cognito_domain"),
+        "web_client_id": get_ssm_param("/app/portfolioadvisor/agentcore/web_client_id"),
+        "token_url": get_ssm_param("/app/portfolioadvisor/agentcore/cognito_token_url"),
+        "auth_scope": get_ssm_param("/app/portfolioadvisor/agentcore/cognito_auth_scope"),
     }
 
 _cognito = None
@@ -168,9 +170,9 @@ def index():
                 payload = tokens.get("id_token", "").split(".")[1]
                 payload += "=" * (4 - len(payload) % 4)
                 claims = json.loads(base64.b64decode(payload))
-                session["username"] = claims.get("email", claims.get("cognito:username", "Customer"))
+                session["username"] = claims.get("email", claims.get("cognito:username", "Client"))
             except Exception:
-                session["username"] = "Customer"
+                session["username"] = "Client"
         return redirect("/")
     if "access_token" not in session:
         cognito = get_cognito()
@@ -179,7 +181,7 @@ def index():
             f"&scope=openid+email+profile+{urllib.parse.quote(cognito['auth_scope'])}")
         return render_template("login.html", login_url=login_url)
     return render_template("index.html", runtime_arn=RUNTIME_ARN or "Not deployed",
-                           username=session.get("username", "Customer"))
+                           username=session.get("username", "Client"))
 
 @app.route("/logout")
 def logout():
@@ -228,13 +230,13 @@ if __name__ == "__main__":
 
 > **How it works:**
 > - `get_runtime_arn()` reads `agentcore/.cli/deployed-state.json` to discover your agent ARN automatically.
-> - When a user opens the app, they're redirected to Cognito's hosted login page. After login, Cognito redirects back with an authorization code that the backend exchanges for an access token.
-> - The `/chat` endpoint uses the user's access token to call the AgentCore REST API with an `Authorization: Bearer` header.
+> - When a client opens the app, they're redirected to Cognito's hosted login page. After login, Cognito redirects back with an authorization code that the backend exchanges for an access token.
+> - The `/chat` endpoint uses the client's access token to call the AgentCore REST API with an `Authorization: Bearer` header.
 > - boto3 doesn't support JWT bearer token invocation, so we use the `requests` library to call the API directly.
 
 ## Step 4: Create the Login Page
 
-Create `app/CustomerSupport/frontend/templates/login.html` in Kiro's editor:
+Create `app/PortfolioAdvisor/frontend/templates/login.html` in Kiro's editor:
 
 :::code{language=html}
 <!DOCTYPE html>
@@ -242,7 +244,7 @@ Create `app/CustomerSupport/frontend/templates/login.html` in Kiro's editor:
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Customer Support - Sign In</title>
+<title>Portfolio Advisor - Sign In</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: linear-gradient(180deg, #d6eaf8 0%, #ebf0f5 40%, #f5f7fa 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; }
@@ -258,8 +260,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 <body>
 <div class="login-card">
   <div class="avatar">🤖</div>
-  <h1>Customer Support Agent</h1>
-  <p>Sign in to chat with your AI-powered customer support assistant.</p>
+  <h1>Portfolio Advisor</h1>
+  <p>Sign in to chat with your AI-powered portfolio advisor.</p>
   <a href="{{ login_url }}" class="login-btn">Sign in with Cognito</a>
   <div class="footer">Powered by Amazon Bedrock AgentCore</div>
 </div>
@@ -269,7 +271,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 
 ## Step 5: Create the Chat UI
 
-Create `app/CustomerSupport/frontend/templates/index.html` in Kiro's editor:
+Create `app/PortfolioAdvisor/frontend/templates/index.html` in Kiro's editor:
 
 :::code{language=html}
 <!DOCTYPE html>
@@ -277,7 +279,7 @@ Create `app/CustomerSupport/frontend/templates/index.html` in Kiro's editor:
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Customer Support Agent</title>
+<title>Portfolio Advisor</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
@@ -414,14 +416,14 @@ body {
   <div class="chat-area" id="chatArea"></div>
   <div class="input-area">
     <div class="input-bar">
-      <input id="msgInput" type="text" placeholder="Ask your customer support agent..." onkeydown="if(event.key==='Enter')sendMsg()" autofocus />
+      <input id="msgInput" type="text" placeholder="Ask your portfolio advisor..." onkeydown="if(event.key==='Enter')sendMsg()" autofocus />
       <button onclick="sendMsg()" id="sendBtn">↑</button>
     </div>
     <div class="quick-actions" id="quickActions">
-      <button onclick="quickSend('What products do you have?')">🛒 Products</button>
-      <button onclick="quickSend('What is the return policy for electronics?')">↩️ Returns</button>
-      <button onclick="quickSend('Check warranty for PROD-002')">🛡️ Warranty</button>
-      <button onclick="quickSend('Do you remember me?')">🧠 Memory</button>
+      <button onclick="quickSend('Analyze AAPL stock')">📊 Analyze Stock</button>
+      <button onclick="quickSend('Check portfolio risk for PORT-001')">📈 Portfolio Risk</button>
+      <button onclick="quickSend('Execute a trade: buy 100 MSFT market')">💹 Execute Trade</button>
+      <button onclick="quickSend('Do you remember my preferences?')">🧠 Memory</button>
     </div>
   </div>
 </div>
@@ -499,13 +501,13 @@ function quickSend(text) { document.getElementById('msgInput').value = text; sen
 In Kiro's terminal, start the Flask app:
 
 :::code{language=bash}
-cd app/CustomerSupport/frontend
+cd app/PortfolioAdvisor/frontend
 uv run python frontend.py
 :::
 
 You should see:
 :::code{language=bash showCopyAction=false}
-Runtime ARN: arn:aws:bedrock-agentcore:us-east-1:ACCOUNT:runtime/CustomerSupport_CustomerSupport-xxxxx
+Runtime ARN: arn:aws:bedrock-agentcore:us-west-2:ACCOUNT:runtime/PortfolioAdvisor_PortfolioAdvisor-xxxxx
  * Running on http://127.0.0.1:8501
 :::
 
@@ -513,7 +515,7 @@ Open your browser at **http://localhost:8501**. You'll see a login page — clic
 
 ![Login page with Sign in with Cognito button](/static/70-lab6-frontend/lab6_login_page.png)
 
-Use the credentials you created in Lab 4:
+Use the credentials you created in Lab 5:
 
 - **Email:** `workshopuser@example.com`
 - **Password:** `WorkshopPass1!`
@@ -536,27 +538,27 @@ This opens an interactive chat interface directly in your terminal where you can
 
 Try the quick action buttons or type your own questions:
 
-**Product inquiry:**
-> "Tell me about the Wireless Headphones"
+**Stock analysis:**
+> "What's the analysis for MSFT?"
 
-**Return policy:**
-> "What's the return policy for electronics?"
+**Compliance inquiry:**
+> "What are the compliance rules for margin trading?"
 
-**Warranty check (via Gateway):**
-> "Check warranty for PROD-002"
+**Portfolio risk check (via Gateway):**
+> "Check the portfolio risk for PORT-002"
 
 **Memory recall:**
-> "Do you remember me?"
+> "Do you remember my investment preferences?"
 
 **Session continuity — send multiple messages in the same session:**
-> "My name is Alex"
-> "What's my name?"
+> "My name is Alex Chen, I prefer conservative dividend stocks"
+> "What are my preferences?"
 
 Click **🔄 New Session** to start a fresh conversation — the agent won't remember the previous session context (but long-term memory facts will persist).
 
 ## Architecture
 
-![Lab 6 Architecture](/static/70-lab6-frontend/lab6_architecture_diagram.png)
+![Lab 7 Architecture](/static/70-lab6-frontend/lab6_architecture_diagram.png)
 
 :::code{language=bash showCopyAction=false}
 User (browser at localhost:8501)
@@ -569,12 +571,12 @@ invoke_agent_runtime(bearerToken=token)
     ↓
 Cognito validates JWT
     ↓
-AgentCore Runtime (CustomerSupport)
+AgentCore Runtime (PortfolioAdvisor)
     ├── Session management (isolated per session-id)
     ├── Memory (SEMANTIC + SUMMARIZATION)
-    ├── Local tools: get_return_policy(), get_product_info()
+    ├── Local tools: get_stock_analysis(), get_compliance_rules()
     ├── MCP Client → Exa AI (web search)
-    └── MCP Client → AgentCore Gateway (secured) → Lambda: check_warranty
+    └── MCP Client → AgentCore Gateway (secured) → Lambda: check_portfolio_risk
                           ↓
                     CloudWatch + AgentCore Evaluations
 :::
@@ -598,7 +600,7 @@ User types message in chat
     ↓
 Flask calls AgentCore REST API with Authorization: Bearer header
     ↓
-AgentCore Runtime validates JWT and processes the request
+AgentCore Runtime (PortfolioAdvisor) validates JWT and processes the request
     ↓
 Agent uses tools (local + Gateway) and memory
     ↓
@@ -606,27 +608,14 @@ Response returned as JSON to browser
 :::
 
 Key features:
-- **Cognito login** — Users authenticate via Cognito's hosted UI (authorization code flow)
+- **Cognito login** — Clients authenticate via Cognito's hosted UI (authorization code flow)
 - **Auto-discovery** — The backend reads `deployed-state.json` to find your agent ARN automatically
 - **Session management** — Each conversation gets a unique UUID session ID
 - **Persistent history** — Chat history is maintained in the browser
 - **Logout** — The logout button clears the session and redirects to Cognito's logout endpoint
 
-## Congratulations — Workshop Complete! 🎉
-
-You've built a complete customer support system from prototype to production:
-
-| Lab | What You Built |
-|-----|---------------|
-| 1 | Agent prototype with local tools |
-| 2 | Persistent memory across sessions |
-| 3 | Centralized tools via Gateway |
-| 4 | Production security, observability, and session management |
-| 5 | Continuous quality monitoring |
-| 6 | Customer-facing chat interface with Cognito authentication |
-
 ### What's Next
 
-In Lab 7, you'll add governance to your agent with AgentCore Policies — controlling what tools the agent can use and under what conditions, all without changing agent code.
+In Lab 8, you'll add governance to your agent with AgentCore Policies — controlling what tools the agent can use and under what conditions, all without changing agent code.
 
-→ Next: [Lab 7: Governing Agent Actions with Policies](../80-lab7-policies/)
+→ Next: [Lab 8: Governing Agent Actions with Policies](../80-lab7-governing-actions/)

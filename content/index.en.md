@@ -36,20 +36,29 @@ Invoking your agent is as straightforward as running `agentcore invoke` with a J
 | **AgentCore Gateway** | MCP-compatible proxy to centralize and secure tool access across agents |
 | **AgentCore Identity** | Secure credential management for API keys and OAuth providers |
 | **AgentCore Observability** | Tracing and monitoring via CloudWatch GenAI Observability |
+| **AgentCore Policy** | Cedar-based fine-grained authorization for tool access at the Gateway boundary |
+| **AgentCore Evaluations** | Continuous quality monitoring with built-in LLM-as-a-Judge evaluators |
 
 ## What You'll Build
 
-In this hands-on workshop, you'll build a **Customer Support Agent** from prototype to production using the AgentCore CLI and [Kiro IDE](https://kiro.dev). This workshop demonstrates the full spectrum of AgentCore capabilities applied to the common use case of customer support.
+In this hands-on workshop, you'll build a **Portfolio Advisor Agent** for a capital markets firm — from prototype to production — using the AgentCore CLI and [Kiro IDE](https://kiro.dev). This workshop demonstrates the full spectrum of AgentCore capabilities applied to portfolio advisory use cases.
+
+This workshop focuses on capital markets use cases — stock analysis, portfolio risk assessment, trade execution, and compliance rules.
+
+> **Note:** The financial data, compliance rules, and trading scenarios in this workshop are simulated for educational purposes only and do not constitute actual regulatory guidance.
 
 | Lab | Title | Time | What You'll Learn |
 |-----|-------|------|-------------------|
-| 1 | Create Agent Prototype | ~20 min | Scaffold a project, add custom tools, test locally |
-| 2 | Add Memory | ~20 min | Persistent memory across sessions with SEMANTIC and SUMMARIZATION strategies |
+| 1 | Build Your Portfolio Advisor Prototype | ~20 min | Scaffold a project, add stock analysis and compliance tools, test locally |
+| 2 | Add Memory for Client Personalization | ~20 min | Persistent memory across sessions with SEMANTIC and SUMMARIZATION strategies |
 | 3 | Scale with Gateway & Identity | ~30 min | Centralize tools via Lambda + AgentCore Gateway |
-| 4 | Production Observability | ~15 min | Session management, traces, and logs via CLI and CloudWatch |
-| 5 | Evaluate Agent Performance | ~15 min | Continuous quality monitoring with built-in evaluators |
-| 6 | Build Customer Interface | ~20 min | Streamlit chat frontend connected to your deployed agent |
-| 7 | Govern Agent Actions | ~20 min | Fine-grained Cedar policies to control tool access at the Gateway |
+| 4 | Production Observability & Session Management | ~15 min | Session continuity, traces, and logs via CLI and CloudWatch |
+| 5 | Secure with JWT Authentication | ~20 min | Cognito JWT auth for runtime and gateway, end-to-end token propagation |
+| 6 | Evaluate Agent Performance | ~15 min | Continuous quality monitoring with built-in evaluators |
+| 7 | Build Client Portal Interface | ~20 min | Flask chat frontend with Cognito login connected to your deployed agent |
+| 8 | Govern Agent Actions with Policies | ~20 min | Fine-grained Cedar policies to control trade execution at the Gateway |
+| 9 | VPC Integration for FSI | ~15 min | Deploy your agent into a VPC for private network isolation |
+| 10 | Cost Optimization & Session Lifecycle | ~15 min | Tune session timeouts, evaluation sampling, and token monitoring |
 
 ### Architecture Overview
 

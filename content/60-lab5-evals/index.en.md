@@ -1,5 +1,5 @@
 ---
-title: "Lab 5: Evaluating Agent Quality"
+title: "Lab 6: Evaluating Agent Quality"
 weight: 62
 ---
 
@@ -7,7 +7,7 @@ weight: 62
 
 ## Overview
 
-Your customer support agent is deployed and running in production with full observability. But how do you know if it's actually performing well? Are customers getting accurate answers? Is the agent selecting the right tools?
+Your portfolio advisor agent is deployed and running in production with full observability. But how do you know if it's actually performing well? Are clients getting accurate investment analysis? Is the agent selecting the right tools?
 
 In this lab, you'll set up continuous quality monitoring using AgentCore Evaluations. This automatically assesses your agent's performance on every interaction (or a sample) using built-in evaluators.
 
@@ -28,20 +28,20 @@ Online evaluation continuously monitors your deployed agent in production:
 
 | Built-in Evaluator | What It Measures |
 |-------------------|-----------------|
-| **Builtin.GoalSuccessRate** | How well the agent achieves the customer's goal |
+| **Builtin.GoalSuccessRate** | How well the agent achieves the client's goal |
 | **Builtin.Correctness** | Factual accuracy of responses |
 | **Builtin.ToolSelectionAccuracy** | Whether the agent picks the right tools |
 
 ## Step 1: Create Online Evaluation Configuration
 
-In Kiro's terminal, add an online evaluation config that monitors your CustomerSupport agent with all three built-in evaluators:
+In Kiro's terminal, add an online evaluation config that monitors your PortfolioAdvisor agent with all three built-in evaluators:
 
 ::::tabs{variant="container" groupId="os"}
 :::tab{label="macOS/Linux"}
 ```bash
 agentcore add online-eval \
   --name QualityMonitor \
-  --runtime CustomerSupport \
+  --runtime PortfolioAdvisor \
   --evaluator Builtin.GoalSuccessRate Builtin.Correctness Builtin.ToolSelectionAccuracy \
   --sampling-rate 100 \
   --enable-on-create
@@ -51,7 +51,7 @@ agentcore add online-eval \
 ```powershell
 agentcore add online-eval `
   --name QualityMonitor `
-  --runtime CustomerSupport `
+  --runtime PortfolioAdvisor `
   --evaluator Builtin.GoalSuccessRate Builtin.Correctness Builtin.ToolSelectionAccuracy `
   --sampling-rate 100 `
   --enable-on-create
@@ -89,18 +89,18 @@ agentcore resume online-eval QualityMonitor
 
 ## Step 3: Generate Test Interactions
 
-Since the runtime is now secured with Cognito (Lab 4), make sure you have a valid token. If your token has expired or you're in a new terminal session, retrieve it again:
+Since the runtime is now secured with Cognito (Lab 5), make sure you have a valid token. If your token has expired or you're in a new terminal session, retrieve it again:
 
 ::::tabs{variant="container" groupId="os"}
 :::tab{label="macOS/Linux"}
 ```bash
-# Skip this block if $TOKEN is still set from Lab 4
+# Skip this block if $TOKEN is still set from Lab 5
 COGNITO_POOL_ID=$(aws ssm get-parameter \
-  --name /app/customersupport/agentcore/pool_id \
+  --name /app/portfolioadvisor/agentcore/pool_id \
   --query 'Parameter.Value' --output text)
 
 COGNITO_WEB_CLIENT_ID=$(aws ssm get-parameter \
-  --name /app/customersupport/agentcore/web_client_id \
+  --name /app/portfolioadvisor/agentcore/web_client_id \
   --query 'Parameter.Value' --output text)
 
 TOKEN=$(aws cognito-idp initiate-auth \
@@ -114,13 +114,13 @@ echo "Token obtained successfully"
 :::
 :::tab{label="Windows"}
 ```powershell
-# Skip this block if $TOKEN is still set from Lab 4
+# Skip this block if $TOKEN is still set from Lab 5
 $COGNITO_POOL_ID = aws ssm get-parameter `
-  --name /app/customersupport/agentcore/pool_id `
+  --name /app/portfolioadvisor/agentcore/pool_id `
   --query 'Parameter.Value' --output text
 
 $COGNITO_WEB_CLIENT_ID = aws ssm get-parameter `
-  --name /app/customersupport/agentcore/web_client_id `
+  --name /app/portfolioadvisor/agentcore/web_client_id `
   --query 'Parameter.Value' --output text
 
 $TOKEN = aws cognito-idp initiate-auth `
@@ -142,24 +142,24 @@ In Kiro's terminal, let's generate varied interactions to give the evaluators so
 ```bash
 SESSION_EVAL=$(python3 -c 'import uuid; print(uuid.uuid4())')
 
-# Product information query
-agentcore invoke "What can you tell me about the Smart Watch? What's the price and warranty?" \
+# Stock analysis query
+agentcore invoke "What's the current analysis for AAPL? What are the key metrics?" \
   --session-id $SESSION_EVAL --bearer-token "$TOKEN" --stream
 
-# Return policy query
-agentcore invoke "I bought headphones last week but they're not working. What's the return policy for audio products?" \
+# Compliance rules query
+agentcore invoke "What are the compliance rules for options trading? What approvals are needed?" \
   --session-id $SESSION_EVAL --bearer-token "$TOKEN" --stream
 
-# Warranty check (via Gateway)
-agentcore invoke "Check the warranty status for product PROD-001" \
+# Portfolio risk check (via Gateway)
+agentcore invoke "Check the portfolio risk for PORT-001" \
   --session-id $SESSION_EVAL --bearer-token "$TOKEN" --stream
 
 # Multi-tool query
-agentcore invoke "I want to return my USB-C Hub. What's the policy, and can you check if it's still under warranty?" \
+agentcore invoke "I'm looking at TSLA — what's the risk level? Also check the risk for portfolio PORT-005" \
   --session-id $SESSION_EVAL --bearer-token "$TOKEN" --stream
 
 # General capability query
-agentcore invoke "What kind of support can you provide? List your capabilities." \
+agentcore invoke "What kind of investment analysis can you provide? List your capabilities." \
   --session-id $SESSION_EVAL --bearer-token "$TOKEN" --stream
 ```
 :::
@@ -167,24 +167,24 @@ agentcore invoke "What kind of support can you provide? List your capabilities."
 ```powershell
 $SESSION_EVAL = [guid]::NewGuid().ToString()
 
-# Product information query
-agentcore invoke "What can you tell me about the Smart Watch? What's the price and warranty?" `
+# Stock analysis query
+agentcore invoke "What's the current analysis for AAPL? What are the key metrics?" `
   --session-id $SESSION_EVAL --bearer-token "$TOKEN" --stream
 
-# Return policy query
-agentcore invoke "I bought headphones last week but they're not working. What's the return policy for audio products?" `
+# Compliance rules query
+agentcore invoke "What are the compliance rules for options trading? What approvals are needed?" `
   --session-id $SESSION_EVAL --bearer-token "$TOKEN" --stream
 
-# Warranty check (via Gateway)
-agentcore invoke "Check the warranty status for product PROD-001" `
+# Portfolio risk check (via Gateway)
+agentcore invoke "Check the portfolio risk for PORT-001" `
   --session-id $SESSION_EVAL --bearer-token "$TOKEN" --stream
 
 # Multi-tool query
-agentcore invoke "I want to return my USB-C Hub. What's the policy, and can you check if it's still under warranty?" `
+agentcore invoke "I'm looking at TSLA — what's the risk level? Also check the risk for portfolio PORT-005" `
   --session-id $SESSION_EVAL --bearer-token "$TOKEN" --stream
 
 # General capability query
-agentcore invoke "What kind of support can you provide? List your capabilities." `
+agentcore invoke "What kind of investment analysis can you provide? List your capabilities." `
   --session-id $SESSION_EVAL --bearer-token "$TOKEN" --stream
 
 ```
@@ -201,7 +201,7 @@ In addition to continuous online evaluation, you can run evaluations on-demand a
 :::tab{label="macOS/Linux"}
 ```bash
 agentcore run eval \
-  --runtime CustomerSupport \
+  --runtime PortfolioAdvisor \
   --evaluator Builtin.GoalSuccessRate Builtin.Correctness \
   --days 1
 ```
@@ -209,7 +209,7 @@ agentcore run eval \
 :::tab{label="Windows"}
 ```powershell
 agentcore run eval `
-  --runtime CustomerSupport `
+  --runtime PortfolioAdvisor `
   --evaluator Builtin.GoalSuccessRate Builtin.Correctness `
   --days 1
 
@@ -226,13 +226,13 @@ This evaluates all traces from the last day using the specified evaluators.
 View past evaluation run results:
 
 :::code{language=bash}
-agentcore evals history --runtime CustomerSupport --limit 5
+agentcore evals history --runtime PortfolioAdvisor --limit 5
 :::
 
 View online evaluation logs:
 
 :::code{language=bash}
-agentcore logs evals --runtime CustomerSupport --since 30m
+agentcore logs evals --runtime PortfolioAdvisor --since 30m
 :::
 
 ### Via CloudWatch Console
@@ -241,12 +241,12 @@ For a visual dashboard with trends and detailed scores:
 
 1. Navigate to the [CloudWatch console](https://console.aws.amazon.com/cloudwatch/)
 2. Go to **GenAI Observability** → **Bedrock AgentCore**
-3. Click on your **CustomerSupport** agent
+3. Click on your **PortfolioAdvisor** agent
 4. Click on the **DEFAULT** endpoint
 5. Look for evaluation scores in the **Sessions** and **Traces** views
 
 The dashboard shows:
-- **Goal Success Rate** — Are customers getting their problems solved?
+- **Goal Success Rate** — Are clients getting accurate investment guidance?
 - **Correctness** — Is the information accurate?
 - **Tool Selection Accuracy** — Is the agent using the right tools?
 
@@ -263,7 +263,7 @@ The dashboard shows:
 ### Common Improvements
 
 - **Low Goal Success Rate** → Refine the system prompt, add more specific tool descriptions
-- **Low Correctness** → Update product data, improve tool response formatting
+- **Low Correctness** → Update market data, improve analysis formatting
 - **Low Tool Selection** → Improve tool descriptions, add examples to the system prompt
 
 ## Step 7: Pause/Resume Evaluation (Optional)
@@ -282,19 +282,19 @@ agentcore resume online-eval QualityMonitor
 
 After completing this lab, your deployed architecture includes continuous evaluation:
 
-![Lab 5 Architecture](/static/60-lab5-evals/lab5_architecture_diagram.png)
+![Lab 6 Architecture](/static/60-lab5-evals/lab5_architecture_diagram.png)
 
 :::code{language=bash showCopyAction=false}
 Client (with JWT token)
     ↓
 Cognito validates token
     ↓
-AgentCore Runtime (CustomerSupport)
+AgentCore Runtime (PortfolioAdvisor)
     ├── Session management (isolated per session-id)
     ├── Memory (SEMANTIC + SUMMARIZATION)
-    ├── Local tools: get_return_policy(), get_product_info()
+    ├── Local tools: get_stock_analysis(), get_compliance_rules()
     ├── MCP Client → Exa AI (web search)
-    └── MCP Client → AgentCore Gateway (secured) → Lambda: check_warranty
+    └── MCP Client → AgentCore Gateway (secured) → Lambda: check_portfolio_risk
                           ↓
                     CloudWatch (traces, logs, metrics)
                           ↓
@@ -319,27 +319,15 @@ The evaluators now automatically:
 
 ## Congratulations!
 
-Your agent now has continuous quality monitoring:
+Your PortfolioAdvisor agent now has continuous quality monitoring:
 
 - ✅ **Online evaluation** — Automatic assessment of every interaction
 - ✅ **Built-in evaluators** — Goal success, correctness, and tool selection
 - ✅ **On-demand evaluation** — Run evaluations against historical traces
 - ✅ **CLI management** — View results, pause/resume from your terminal
 
-### Workshop Complete! 🎉
-
-You've built a complete customer support agent from prototype to production:
-
-| Lab | What You Built |
-|-----|---------------|
-| 1 | Agent prototype with local tools |
-| 2 | Persistent memory across sessions |
-| 3 | Centralized tools via Gateway |
-| 4 | Production security, observability, and session management |
-| 5 | Continuous quality monitoring |
-
 ### What's Next
 
-In Lab 6, you'll build a customer-facing chat interface using Streamlit so customers can interact with your agent through a web browser.
+In Lab 7, you'll build a client-facing portal interface using Flask so clients can interact with your portfolio advisor through a web browser.
 
-→ Next: [Lab 6: Building the Customer Interface](../70-lab6-frontend/)
+→ Next: [Lab 7: Build Client Portal Interface](../70-lab6-frontend/)

@@ -7,28 +7,28 @@ weight: 32
 
 ## Overview
 
-Personalization requires memory that persists across sessions. Users have preferences about how they like information presented. They work on specific projects that provide context for their questions. They use terminology and abbreviations specific to their role. AgentCore Memory provides both short-term memory for conversation history and long-term memory for facts, preferences, and past interactions. Memory is namespaced by user so each person’s context remains private. 
+Personalization requires memory that persists across sessions. Users have preferences about how they like information presented. They work on specific projects that provide context for their questions. They use terminology and abbreviations specific to their role. AgentCore Memory provides both short-term memory for conversation history and long-term memory for facts, preferences, and past interactions. Memory is namespaced by user so each person's context remains private. 
 
-Picture this: A valued customer contacts your support team about an issue with their recent order. They explain their preferences, share their frustration, and work with your agent to resolve the problem. Three weeks later, they contact support again with a related question. But now they have to repeat everything — their preferences, their history, their context — because your agent has no memory of previous interactions.
+Picture this: A valued client contacts your advisory team about their portfolio strategy. They explain their risk tolerance, share their investment preferences, and work with your agent to analyze potential trades. Three weeks later, they contact the firm again with a follow-up question. But now they have to repeat everything — their risk tolerance, their portfolio goals, their preferences — because your agent has no memory of previous interactions.
 
 This is the reality for most AI agents today. Every conversation starts from zero, creating:
-- Frustrated customers who must repeat their information repeatedly
-- Inefficient support that cannot build on previous interactions
-- Lost opportunities to provide personalized, proactive service
-- Poor customer satisfaction due to impersonal, generic responses
+- Frustrated clients who must repeat their investment preferences repeatedly
+- Inefficient advisory that cannot build on previous interactions
+- Lost opportunities to provide personalized, proactive recommendations
+- Poor client satisfaction due to impersonal, generic responses
 
 [Amazon Bedrock AgentCore Memory](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/memory.html) addresses this limitation by providing a managed service that enables AI agents to maintain context over time, remember important facts, and deliver consistent, personalized experiences.
 
 ## What We Are Building
 
-### Transform Your Prototype into a Customer-Obsessed Agent
+### Transform Your Prototype into a Client-Aware Advisor
 
-In this lab, you'll upgrade your Lab 1 prototype to deliver exceptional customer experiences through intelligent memory. Your agent will evolve from a forgetful prototype to a customer-aware assistant that:
+In this lab, you'll upgrade your Lab 1 prototype to deliver exceptional client experiences through intelligent memory. Your agent will evolve from a forgetful prototype to a client-aware assistant that:
 
-- **"Welcome back, Sarah!"** — Instantly recognizes returning customers
-- **"I remember you prefer email updates"** — Recalls individual preferences automatically
-- **"Following up on your laptop issue from last month"** — Connects related conversations seamlessly
-- **"Based on your purchase history, here's what I recommend"** — Provides personalized suggestions
+- **"Welcome back, Mr. Chen!"** — Instantly recognizes returning clients
+- **"I remember you prefer conservative investments"** — Recalls individual preferences automatically
+- **"Following up on your TSLA analysis from last month"** — Connects related conversations seamlessly
+- **"Based on your risk tolerance, here's what I recommend"** — Provides personalized suggestions
 
 ### How AgentCore Memory Works
 
@@ -36,7 +36,7 @@ AgentCore Memory operates on two levels:
 
 | Strategy | Purpose | What It Does |
 |----------|---------|-------------|
-| **SEMANTIC** | Facts and context | Captures factual information from conversations (names, preferences, order details) and makes them retrievable across sessions |
+| **SEMANTIC** | Facts and context | Captures factual information from conversations (names, preferences, portfolio details) and makes them retrievable across sessions |
 | **SUMMARIZATION** | Conversation history | Compressed conversation summaries that provide continuity across sessions |
 
 ## Step 1: Add Memory to Your Project
@@ -117,22 +117,22 @@ The CLI creates the memory resource in the infrastructure, but you need to wire 
 ::::tabs{variant="container" groupId="os"}
 :::tab{label="macOS/Linux"}
 ```bash
-mkdir -p app/CustomerSupport/memory
-touch app/CustomerSupport/memory/__init__.py
-touch app/CustomerSupport/memory/session.py
+mkdir -p app/PortfolioAdvisor/memory
+touch app/PortfolioAdvisor/memory/__init__.py
+touch app/PortfolioAdvisor/memory/session.py
 ```
 :::
 :::tab{label="Windows"}
 ```powershell
-mkdir app\CustomerSupport\memory
-New-Item app\CustomerSupport\memory\__init__.py -Force
-New-Item app\CustomerSupport\memory\session.py -Force
+mkdir app\PortfolioAdvisor\memory
+New-Item app\PortfolioAdvisor\memory\__init__.py -Force
+New-Item app\PortfolioAdvisor\memory\session.py -Force
 
 ```
 :::
 ::::
 
-Open `app/CustomerSupport/memory/session.py` (open the file in Kiro's editor and copy following code):
+Open `app/PortfolioAdvisor/memory/session.py` (open the file in Kiro's editor and copy following code):
 
 :::alert{header="What this code does" type="info"}
 This module creates a memory session manager that connects your agent to AgentCore Memory. It configures two retrieval namespaces: one for user-specific facts (`/users/{actorId}/facts`) extracted by the SEMANTIC strategy, and one for conversation summaries (`/summaries/{actorId}/{sessionId}`) from the SUMMARIZATION strategy. The `MEMORY_SHAREDMEMORY_ID` environment variable is automatically injected by AgentCore Runtime after deployment.
@@ -171,7 +171,7 @@ def get_memory_session_manager(session_id: str, actor_id: str) -> Optional[Agent
 
 ## Step 3: Update main.py to Use Memory
 
-Open `app/CustomerSupport/main.py` in Kiro's editor. The key changes are:
+Open `app/PortfolioAdvisor/main.py` in Kiro's editor. The key changes are:
 - Import the memory session manager
 - Use a factory pattern to create agents per session/user
 - Extract `session_id` and `user_id` from the runtime context
@@ -193,75 +193,90 @@ log = app.logger
 # Exa AI MCP client for web search
 mcp_clients = [get_streamable_http_mcp_client()]
 
-SYSTEM_PROMPT="""You are a helpful and professional customer support assistant for an e-commerce company.
+SYSTEM_PROMPT="""You are a knowledgeable and professional portfolio advisor assistant for a capital markets firm.
 Your role is to:
-- Provide accurate information using the tools available to you
-- Be friendly, patient, and understanding with customers
-- Always offer additional help after answering questions
-- If you can't help with something, direct customers to the appropriate contact
+- Provide accurate stock analysis and market data using the tools available to you
+- Explain compliance rules clearly when asked about trading requirements
+- Be professional, precise, and thorough in your analysis
+- Always caveat that this is informational only and not personalized investment advice
+- If you can't help with something, direct the user to the appropriate compliance or research team
 
 You have access to the following tools:
-1. get_return_policy() - For return policy questions
-2. get_product_info() - To look up product information and specifications
-3. Web search - To search the web for troubleshooting help
+1. get_stock_analysis() - For stock fundamentals, risk profiles, and analyst ratings
+2. get_compliance_rules() - For trading compliance rules, restrictions, and approval requirements
+3. Web search - To search the web for market news and research
 
 Always use the appropriate tool to get accurate, up-to-date information rather than guessing."""
 
-# --- Customer Support Tools ---
+# --- Portfolio Advisor Tools ---
 
-RETURN_POLICIES = {
-    "electronics": {"window": "30 days", "condition": "Original packaging required, must be unused or defective", "refund": "Full refund to original payment method"},
-    "accessories": {"window": "14 days", "condition": "Must be in original packaging, unused", "refund": "Store credit or exchange"},
-    "audio": {"window": "30 days", "condition": "Defective items only after 15 days", "refund": "Full refund within 15 days, replacement after"},
+STOCKS = {
+    "AAPL": {"name": "Apple Inc.", "sector": "Technology", "price": 198.50, "pe_ratio": 32.1, "dividend_yield": 0.55, "analyst_rating": "Buy", "risk_level": "moderate", "market_cap": "3.0T", "description": "Consumer electronics, software, and services company"},
+    "MSFT": {"name": "Microsoft Corp.", "sector": "Technology", "price": 425.20, "pe_ratio": 36.8, "dividend_yield": 0.72, "analyst_rating": "Strong Buy", "risk_level": "low", "market_cap": "3.1T", "description": "Cloud computing, productivity software, and AI services"},
+    "JPM": {"name": "JPMorgan Chase & Co.", "sector": "Financials", "price": 215.30, "pe_ratio": 12.4, "dividend_yield": 2.15, "analyst_rating": "Buy", "risk_level": "moderate", "market_cap": "620B", "description": "Global financial services and investment banking"},
+    "GS": {"name": "Goldman Sachs Group Inc.", "sector": "Financials", "price": 485.60, "pe_ratio": 15.2, "dividend_yield": 2.35, "analyst_rating": "Hold", "risk_level": "moderate", "market_cap": "170B", "description": "Investment banking, securities, and asset management"},
+    "AMZN": {"name": "Amazon.com Inc.", "sector": "Technology", "price": 186.40, "pe_ratio": 58.3, "dividend_yield": 0.0, "analyst_rating": "Strong Buy", "risk_level": "moderate", "market_cap": "1.9T", "description": "E-commerce, cloud computing (AWS), and digital streaming"},
+    "V": {"name": "Visa Inc.", "sector": "Financials", "price": 289.70, "pe_ratio": 30.5, "dividend_yield": 0.75, "analyst_rating": "Buy", "risk_level": "low", "market_cap": "580B", "description": "Global payments technology and digital transactions"},
+    "UNH": {"name": "UnitedHealth Group Inc.", "sector": "Healthcare", "price": 520.80, "pe_ratio": 20.1, "dividend_yield": 1.45, "analyst_rating": "Buy", "risk_level": "low", "market_cap": "480B", "description": "Health insurance and healthcare services"},
+    "TSLA": {"name": "Tesla Inc.", "sector": "Consumer Discretionary", "price": 248.90, "pe_ratio": 68.5, "dividend_yield": 0.0, "analyst_rating": "Hold", "risk_level": "high", "market_cap": "790B", "description": "Electric vehicles, energy storage, and solar products"},
+    "BRK-B": {"name": "Berkshire Hathaway Inc.", "sector": "Financials", "price": 432.10, "pe_ratio": 9.8, "dividend_yield": 0.0, "analyst_rating": "Buy", "risk_level": "low", "market_cap": "950B", "description": "Diversified holding company — insurance, rail, utilities, manufacturing"},
+    "GOOG": {"name": "Alphabet Inc.", "sector": "Technology", "price": 172.30, "pe_ratio": 25.6, "dividend_yield": 0.45, "analyst_rating": "Strong Buy", "risk_level": "moderate", "market_cap": "2.1T", "description": "Search, advertising, cloud computing, and AI research"},
 }
 
-PRODUCTS = {
-    "PROD-001": {"name": "Wireless Headphones", "price": 79.99, "category": "audio", "description": "Noise-cancelling Bluetooth headphones with 30h battery life", "warranty_months": 12},
-    "PROD-002": {"name": "Smart Watch", "price": 249.99, "category": "electronics", "description": "Fitness tracker with heart rate monitor, GPS, and 5-day battery", "warranty_months": 24},
-    "PROD-003": {"name": "Laptop Stand", "price": 39.99, "category": "accessories", "description": "Adjustable aluminum laptop stand for ergonomic desk setup", "warranty_months": 6},
-    "PROD-004": {"name": "USB-C Hub", "price": 54.99, "category": "accessories", "description": "7-in-1 USB-C hub with HDMI, USB-A, SD card reader, and ethernet", "warranty_months": 12},
-    "PROD-005": {"name": "Mechanical Keyboard", "price": 129.99, "category": "electronics", "description": "RGB mechanical keyboard with Cherry MX switches", "warranty_months": 24},
+COMPLIANCE_RULES = {
+    "equity": {"description": "Standard equity (stock) trading", "min_order": 1, "max_order": 10000, "settlement": "T+1", "restrictions": "No trading during blackout periods. Insider trading rules apply.", "required_approvals": "None for orders under $100,000. Manager approval for orders $100,000+.", "hours": "9:30 AM - 4:00 PM ET (regular session)"},
+    "options": {"description": "Options contracts trading (calls and puts)", "min_order": 1, "max_order": 500, "settlement": "T+1", "restrictions": "Level 2+ options approval required. No naked calls without Level 4 approval.", "required_approvals": "Compliance review for positions exceeding $50,000 notional value.", "hours": "9:30 AM - 4:00 PM ET (regular session)"},
+    "margin": {"description": "Margin trading — borrowing funds to purchase securities", "min_order": 1, "max_order": 5000, "settlement": "T+1", "restrictions": "Maintenance margin of 25% required. Margin calls must be met within 3 business days.", "required_approvals": "Margin agreement on file. Compliance review for margin utilization above 70%.", "hours": "9:30 AM - 4:00 PM ET (regular session)"},
+    "short-selling": {"description": "Short selling — selling borrowed securities to buy back later", "min_order": 1, "max_order": 2000, "settlement": "T+1", "restrictions": "Locate requirement — shares must be available to borrow before shorting. Uptick rule applies.", "required_approvals": "Short-selling agreement required. Compliance pre-approval for positions above $200,000.", "hours": "9:30 AM - 4:00 PM ET (regular session)"},
 }
 
 @tool
-def get_return_policy(product_category: str) -> str:
-    """Get return policy information for a specific product category.
+def get_stock_analysis(ticker: str) -> str:
+    """Get stock analysis data including price, fundamentals, and risk profile.
 
     Args:
-        product_category: Product category (e.g., 'electronics', 'accessories', 'audio')
+        ticker: Stock ticker symbol (e.g., 'AAPL', 'MSFT', 'JPM')
 
     Returns:
-        Formatted return policy details including timeframes and conditions
+        Formatted stock analysis with price, PE ratio, dividend yield, analyst rating, and risk level
     """
-    category = product_category.lower()
-    if category in RETURN_POLICIES:
-        policy = RETURN_POLICIES[category]
-        return f"Return policy for {category}: Window: {policy['window']}, Condition: {policy['condition']}, Refund: {policy['refund']}"
-    return f"No specific return policy found for '{product_category}'. Please contact support for details."
+    ticker = ticker.upper()
+    if ticker in STOCKS:
+        s = STOCKS[ticker]
+        return (
+            f"{s['name']} ({ticker})\n"
+            f"  Sector: {s['sector']} | Market Cap: {s['market_cap']}\n"
+            f"  Price: ${s['price']} | P/E Ratio: {s['pe_ratio']}\n"
+            f"  Dividend Yield: {s['dividend_yield']}% | Analyst Rating: {s['analyst_rating']}\n"
+            f"  Risk Level: {s['risk_level']}\n"
+            f"  Description: {s['description']}"
+        )
+    return f"Unknown ticker symbol '{ticker}'. Available tickers: {', '.join(STOCKS.keys())}"
 
 @tool
-def get_product_info(query: str) -> str:
-    """Search for product information by name, ID, or keyword.
+def get_compliance_rules(trade_type: str) -> str:
+    """Get compliance rules for a specific trade type.
 
     Args:
-        query: Product name, ID (e.g., 'PROD-001'), or search keyword
+        trade_type: Type of trade (e.g., 'equity', 'options', 'margin', 'short-selling')
 
     Returns:
-        Product details including name, price, category, and description
+        Compliance rules including order limits, settlement, restrictions, and required approvals
     """
-    query_lower = query.lower()
-    # Search by ID
-    if query.upper() in PRODUCTS:
-        p = PRODUCTS[query.upper()]
-        return f"{p['name']} ({query.upper()}): ${p['price']}, Category: {p['category']}, {p['description']}, Warranty: {p['warranty_months']} months"
-    # Search by keyword
-    results = [f"{pid}: {p['name']} - ${p['price']} - {p['description']}" for pid, p in PRODUCTS.items()
-               if query_lower in p['name'].lower() or query_lower in p['description'].lower() or query_lower in p['category'].lower()]
-    if results:
-        return "Found products:\n" + "\n".join(results)
-    return f"No products found matching '{query}'."
+    trade_type = trade_type.lower()
+    if trade_type in COMPLIANCE_RULES:
+        r = COMPLIANCE_RULES[trade_type]
+        return (
+            f"Compliance Rules — {r['description']}\n"
+            f"  Order Range: {r['min_order']} - {r['max_order']} shares\n"
+            f"  Settlement: {r['settlement']}\n"
+            f"  Trading Hours: {r['hours']}\n"
+            f"  Restrictions: {r['restrictions']}\n"
+            f"  Required Approvals: {r['required_approvals']}"
+        )
+    return f"Unknown trade type '{trade_type}'. Available types: {', '.join(COMPLIANCE_RULES.keys())}"
 
-tools = [get_return_policy, get_product_info]
+tools = [get_stock_analysis, get_compliance_rules]
 
 # Add MCP client (Exa AI web search) to tools
 for mcp_client in mcp_clients:
@@ -305,7 +320,7 @@ if __name__ == "__main__":
     app.run()
 :::
 
-The user-id is retrieved from a custom header as shown in the above code. We need to allowlist the customer header in `agentcore.json`.
+The user-id is retrieved from a custom header as shown in the above code. We need to allowlist the custom header in `agentcore.json`.
 Add below entry to the runtime config:
 
 :::code{language=json}
@@ -319,10 +334,10 @@ The runtime config in `agentcore.json` should look like:
 :::code{language=json showCopyAction=false}
 "runtimes": [
     {
-        "name": "CustomerSupport",
+        "name": "PortfolioAdvisor",
         "build": "CodeZip",
         "entrypoint": "main.py",
-        "codeLocation": "app/ClientSupport/",
+        "codeLocation": "app/PortfolioAdvisor/",
         "runtimeVersion": "PYTHON_3_13",
         "networkMode": "PUBLIC",
         "protocol": "HTTP",
@@ -333,7 +348,7 @@ The runtime config in `agentcore.json` should look like:
 ]
 :::
 
-This is an important step before moving to the next step to make sure that the AgentCore Runtime understands the custom header once the agent is invoked. Ideally, once security is implemented, the `user-id` or `actor-id` should be retreived from the authorization claims. We will see that behavior in Lab 4.
+This is an important step before moving to the next step to make sure that the AgentCore Runtime understands the custom header once the agent is invoked. Ideally, once security is implemented, the `user-id` or `actor-id` should be retrieved from the authorization claims. We will see that behavior in Lab 5.
 
 ## Step 4: Deploy to Enable Memory
 
@@ -354,7 +369,7 @@ You should see the memory resource being added to your existing deployment:
 ✓ Deploy to AWS
   - AWS::IAM::Role (ExecutionRole)
   - AWS::BedrockAgentCore::Memory (SharedMemory)
-  - AWS::BedrockAgentCore::Runtime (CustomerSupport) [updated]
+  - AWS::BedrockAgentCore::Runtime (PortfolioAdvisor) [updated]
 ✓ Persist deployment state
 
 ✓ Deployed to 'default'
@@ -376,23 +391,23 @@ Now let's test that memory works across sessions. First, tell the agent somethin
 :::tab{label="macOS/Linux"}
 ```bash
 SESSION_A=$(python3 -c 'import uuid; print(uuid.uuid4())')
-agentcore invoke "My name is Sarah and I prefer email updates. I recently bought a Smart Watch." \
+agentcore invoke "My name is Alex Chen. I prefer conservative investments with a focus on dividends. My risk tolerance is moderate." \
   --session-id $SESSION_A \
-  -H "X-Amzn-Bedrock-AgentCore-Runtime-Custom-User-Id: Sarah" --stream
+  -H "X-Amzn-Bedrock-AgentCore-Runtime-Custom-User-Id: AlexChen" --stream
 ```
 :::
 :::tab{label="Windows"}
 ```powershell
 $SESSION_A = [guid]::NewGuid().ToString()
-agentcore invoke "My name is Sarah and I prefer email updates. I recently bought a Smart Watch." `
+agentcore invoke "My name is Alex Chen. I prefer conservative investments with a focus on dividends. My risk tolerance is moderate." `
   --session-id $SESSION_A `
-  -H "X-Amzn-Bedrock-AgentCore-Runtime-Custom-User-Id: Sarah" --stream
+  -H "X-Amzn-Bedrock-AgentCore-Runtime-Custom-User-Id: AlexChen" --stream
 
 ```
 :::
 ::::
 
-Note that a random `--session_id` in the format of UUID and the custom header `X-Amzn-Bedrock-AgentCore-Runtime-Custom-User-Id` which we allowlisted in the previous step, is set to Sarah in the command. Wait about 1-2 minutes for the memory extraction to process, then start a **completely new session** and ask. Running the same command with a different prompt works as a new random UUID will be created as session_id. However, the user-id in the custom header is still Sarah:
+Note that a random `--session_id` in the format of UUID and the custom header `X-Amzn-Bedrock-AgentCore-Runtime-Custom-User-Id` which we allowlisted in the previous step, is set to AlexChen in the command. Wait about 1-2 minutes for the memory extraction to process, then start a **completely new session** and ask. Running the same command with a different prompt works as a new random UUID will be created as session_id. However, the user-id in the custom header is still AlexChen:
 
 ::::tabs{variant="container" groupId="os"}
 :::tab{label="macOS/Linux"}
@@ -401,7 +416,7 @@ sleep 2m
 SESSION_B=$(python3 -c 'import uuid; print(uuid.uuid4())')
 agentcore invoke "Do you know anything about me?" \
   --session-id $SESSION_B \
-  -H "X-Amzn-Bedrock-AgentCore-Runtime-Custom-User-Id: Sarah" --stream
+  -H "X-Amzn-Bedrock-AgentCore-Runtime-Custom-User-Id: AlexChen" --stream
 ```
 :::
 :::tab{label="Windows"}
@@ -410,7 +425,7 @@ Start-Sleep -Seconds 120
 $SESSION_B = [guid]::NewGuid().ToString()
 agentcore invoke "Do you know anything about me?" `
   --session-id $SESSION_B `
-  -H "X-Amzn-Bedrock-AgentCore-Runtime-Custom-User-Id: Sarah" --stream
+  -H "X-Amzn-Bedrock-AgentCore-Runtime-Custom-User-Id: AlexChen" --stream
 
 ```
 :::
@@ -418,13 +433,13 @@ agentcore invoke "Do you know anything about me?" `
 
 Expected response:
 :::code{language=bash showCopyAction=false}
-Yes! I know a few things about you, Sarah:
-1. Your name is Sarah
-2. You prefer email updates
-3. You recently purchased a Smart Watch
+Yes! I know a few things about you, Mr. Chen:
+1. Your name is Alex Chen
+2. You prefer conservative investments with a focus on dividends
+3. Your risk tolerance is moderate
 :::
 
-🎉 **The agent remembered you across sessions!** The SEMANTIC strategy automatically extracted facts from the first conversation and made them available in the second.
+The agent remembered you across sessions! The SEMANTIC strategy automatically extracted facts from the first conversation and made them available in the second.
 
 ## What Just Happened?
 
@@ -444,22 +459,23 @@ When you ran `agentcore deploy` the AgentCore CLI updated your existing CloudFor
 
 | What happened | Strategy | Result |
 |--------------|----------|--------|
-| "My name is Sarah" | SEMANTIC | Extracted as fact: "The user's name is Sarah" |
-| "I prefer email updates" | SEMANTIC | Extracted as fact: "Sarah prefers email updates" |
+| "My name is Alex Chen" | SEMANTIC | Extracted as fact: "The user's name is Alex Chen" |
+| "I prefer conservative investments" | SEMANTIC | Extracted as fact: "Alex Chen prefers conservative investments with dividend focus" |
+| "My risk tolerance is moderate" | SEMANTIC | Extracted as fact: "Alex Chen has moderate risk tolerance" |
 | Full conversation | SUMMARIZATION | Compressed summary stored for session continuity |
 
 > **Important:** Memory extraction is asynchronous. If you test too quickly after the first conversation, the facts may not be available yet. Wait ~1-2 minutes between sessions for all facts to be extracted.
 
-## Congratulations — You've Built a Customer-Obsessed AI Agent!
+## Congratulations — You've Built a Client-Aware Portfolio Advisor!
 
 Your agent now:
-- ✅ **Remembers every customer interaction** using AgentCore Memory
-- ✅ **Extracts customer preferences** automatically via SEMANTIC strategy
-- ✅ **Maintains context across sessions** — no more "goldfish agent"
-- ✅ **Personalizes responses** based on historical patterns
+- **Remembers every client interaction** using AgentCore Memory
+- **Extracts client preferences** automatically via SEMANTIC strategy
+- **Maintains context across sessions** — no more "goldfish agent"
+- **Personalizes responses** based on investment preferences and risk tolerance
 
 ### What's Next
 
 In Lab 3, you'll move from local tools to enterprise-ready services using AgentCore Gateway — centralizing tool management and adding authentication.
 
-→ Next: [Lab 3: Scaling Tools with Gateway](../40-lab3-gateway/)
+→ Next: [Lab 3: Scaling Tools with Gateway](../40-lab3-tool-APIs-gateway/)

@@ -6,42 +6,44 @@ weight: 22
 **⏱️ Estimated time: ~20 minutes**
 
 ## Start small and define success clearly
-The first question you need to answer isn’t “what can this agent do?” but rather “what problem are we solving?” Too many teams start by building an agent that tries to handle every possible scenario. This leads to complexity, slow iteration cycles, and agents that don’t excel at anything.
+The first question you need to answer isn't "what can this agent do?" but rather "what problem are we solving?" Too many teams start by building an agent that tries to handle every possible scenario. This leads to complexity, slow iteration cycles, and agents that don't excel at anything.
 
-Instead, work backwards from a specific use case. If you’re building a financial assistant, start with the three most common analyst tasks. If you’re building an HR helper, focus on the top five employee questions. Get those working reliably before expanding scope.
+Instead, work backwards from a specific use case. If you're building a financial assistant, start with the three most common analyst tasks. If you're building an HR helper, focus on the top five employee questions. Get those working reliably before expanding scope.
 
 Your initial planning should produce four concrete deliverables:
 
  Clear definition of what the agent should and should not do. Write this down. Share it with stakeholders. Use it to say no to feature creep.
-The agent’s tone and personality. Decide if it will be formal or conversation, how it will greet users, and what will happen when it encounters questions outside its scope.
+The agent's tone and personality. Decide if it will be formal or conversation, how it will greet users, and what will happen when it encounters questions outside its scope.
 Unambiguous definitions for every tool, parameter, and knowledge source. Vague descriptions cause the agent to make incorrect choices.
 A ground truth dataset of expected interactions covering both common queries and edge cases.
 
 ![Agent Definition](/static/20-lab1/lab1_agentdefinition.png)
 
-### EDITOR's NOTE MODIFY The section below with new Capital Market use case agent
+In this lab, you'll build a **portfolio advisor agent prototype** for a capital markets firm. The agent will handle common analyst and client inquiries using three specialized tools:
 
-In this lab, you'll build a customer support agent prototype for an e-commerce company. The agent will be able to handle common customer inquiries using three specialized tools:
+1. **`get_stock_analysis()`** — Look up stock analysis data (price, PE ratio, analyst rating, risk level)
+2. **`get_compliance_rules()`** — Retrieve compliance rules for different trade types
+3. **`Exa MCP Tools`** — Search the web for market news and research
 
-1. **`get_return_policy()`** — Look up return policies for different product categories
-2. **`get_product_info()`** — Search product information and specifications
-3. **`Exa MCP Tools`** — Search the web for troubleshooting help
+:::alert{header="Compliance Disclaimer" type="warning"}
+The compliance rules and financial data in this workshop are **simulated for educational purposes only** and do not constitute actual regulatory guidance. Consult your compliance team for real-world implementations.
+:::
 
 The architecture will look as following:
 ![architecture diagram](/static/20-lab1/lab1_architecture_diagram.png)
 
 You'll use the AgentCore CLI to scaffold the project, then customize the agent with these tools. By the end, you'll have a working agent that can:
-- Answer questions about return policies
-- Look up product details
-- Search the web for troubleshooting information
-- Combine tool results with its knowledge to provide helpful responses
+- Analyze stock fundamentals and risk profiles
+- Look up compliance rules for different trade types
+- Search the web for market news and research
+- Combine tool results with its knowledge to provide informed recommendations
 
 ### What happens when you ask the agent a question?
 
-When a customer asks something like *"What's the return policy for my headphones?"*, the agent:
+When an analyst asks something like *"What's the risk profile for TSLA?"*, the agent:
 
-1. **Query analysis** — Analyzes the customer's question
-2. **Tool selection** — Determines which tool(s) to use (`get_return_policy`)
+1. **Query analysis** — Analyzes the analyst's question
+2. **Tool selection** — Determines which tool(s) to use (`get_stock_analysis`)
 3. **Tool execution** — Calls the tool with the correct parameters
 4. **Response synthesis** — Combines tool results with its knowledge
 5. **Quality check** — Ensures the response follows the system prompt guidelines
@@ -60,7 +62,7 @@ Use the `--defaults` flag to generate a Python agent using the Strands Agents SD
 :::tab{label="macOS/Linux"}
 ```bash
 agentcore create \
-  --name CustomerSupport \
+  --name PortfolioAdvisor \
   --framework Strands \
   --model-provider Bedrock \
   --defaults
@@ -69,7 +71,7 @@ agentcore create \
 :::tab{label="Windows"}
 ```powershell
 agentcore create `
-  --name CustomerSupport `
+  --name PortfolioAdvisor `
   --framework Strands `
   --model-provider Bedrock `
   --defaults
@@ -91,12 +93,12 @@ The interactive mode lets you choose from the following options:
 - **Memory** — None, short-term only, or long-term and short-term
 - **Build type** — CodeZip (default) or Container
 
-1. Enter `CustomerSupport` as your project name:
+1. Enter `PortfolioAdvisor` as your project name:
 
 ![Enter your project name in the interactive wizard](/static/20-lab1/lab1_interactive_project_name.png)
 
-:::alert{header="Make sure to use `CustomerSupport` as your project name" type="info"}
-Future parts of this workshop depend on having the correct project name. Make sure to use `CustomerSupport` to avoid discrepancies throughout the workshop.
+:::alert{header="Make sure to use `PortfolioAdvisor` as your project name" type="info"}
+Future parts of this workshop depend on having the correct project name. Make sure to use `PortfolioAdvisor` to avoid discrepancies throughout the workshop.
 
 2. Choose your agent framework and model provider:
 
@@ -111,16 +113,16 @@ Future parts of this workshop depend on having the correct project name. Make su
 You should see:
 
 :::code{language=bash showCopyAction=false}
-[done]  Create CustomerSupport/ project directory
+[done]  Create PortfolioAdvisor/ project directory
 [done]  Prepare agentcore/ directory
 [done]  Initialize git repository
 [done]  Add agent to project
 [done]  Set up Python environment
 
 Created:
-  CustomerSupport/
-    app/CustomerSupport/  Python agent (Strands)
-    agentcore/            Config and CDK project
+  PortfolioAdvisor/
+    app/PortfolioAdvisor/  Python agent (Strands)
+    agentcore/             Config and CDK project
 
 Project created successfully!
 :::
@@ -133,7 +135,7 @@ If the project didn't open automatically, you can open it manually:
 
 ![Click Open a project on the Getting Started page](/static/20-lab1/lab1_open_project.png)
 
-2. Navigate to the `CustomerSupport` folder you just created and click **Open**.
+2. Navigate to the `PortfolioAdvisor` folder you just created and click **Open**.
 
 3. You should now see the full project structure in Kiro's sidebar:
 
@@ -142,7 +144,7 @@ If the project didn't open automatically, you can open it manually:
 Navigate into the project in the terminal:
 
 :::code{language=bash}
-cd CustomerSupport
+cd PortfolioAdvisor
 :::
 
 ## Step 2: Explore the Project Structure
@@ -150,7 +152,7 @@ cd CustomerSupport
 Take a moment to understand what was generated:
 
 :::code{language=bash showCopyAction=false}
-CustomerSupport/
+PortfolioAdvisor/
 ├── AGENTS.md                          # AI assistant context file
 ├── README.md
 ├── agentcore/
@@ -161,7 +163,7 @@ CustomerSupport/
 │   ├── .llm-context/                  # TypeScript type definitions
 │   └── cdk/                           # CDK infrastructure
 └── app/
-    └── CustomerSupport/
+    └── PortfolioAdvisor/
         ├── main.py                    # Agent entry point
         ├── model/load.py              # Model configuration
         ├── mcp_client/client.py       # MCP client (Exa AI web search)
@@ -170,12 +172,12 @@ CustomerSupport/
 
 Key files to look at:
 
-**`app/CustomerSupport/main.py`** — The agent entry point. It creates a Strands Agent with:
+**`app/PortfolioAdvisor/main.py`** — The agent entry point. It creates a Strands Agent with:
 - A system prompt ("You are a helpful assistant")
 - A sample `add_numbers` tool
 - An MCP client connected to Exa AI for web search
 
-**`app/CustomerSupport/model/load.py`** — Model configuration. By default, it uses Claude Sonnet 4.5 via Amazon Bedrock.
+**`app/PortfolioAdvisor/model/load.py`** — Model configuration. By default, it uses Claude Sonnet 4.5 via Amazon Bedrock.
 
 **`agentcore/agentcore.json`** — The project configuration that defines agents, memories, credentials, and other resources.
 
@@ -189,13 +191,13 @@ Key files to look at:
 
 **`agentcore/cdk/`** — A full [AWS CDK](https://aws.amazon.com/cdk/) project (TypeScript) that the CLI uses to deploy your infrastructure. When you run `agentcore deploy`, the CLI synthesizes CloudFormation templates from this CDK code and deploys them. It uses the `@aws/agentcore-cdk` L3 constructs to create AgentCore resources (runtimes, memories, gateways). You don't need to edit this unless you want to customize the infrastructure beyond what the CLI provides.
 
-## Step 3: Customize the Agent with Customer Support Tools
+## Step 3: Customize the Agent with Portfolio Advisor Tools
 
-The generated project comes with a sample `add_numbers` tool and an Exa AI MCP client. Let's replace the sample tool with our customer support tools.
+The generated project comes with a sample `add_numbers` tool and an Exa AI MCP client. Let's replace the sample tool with our portfolio advisor tools.
 
-Open `app/CustomerSupport/main.py` in Kiro's editor. In the sidebar, expand `app` → `CustomerSupport` and click `main.py`:
+Open `app/PortfolioAdvisor/main.py` in Kiro's editor. In the sidebar, expand `app` → `PortfolioAdvisor` and click `main.py`:
 
-![Navigate to app/CustomerSupport/main.py in the sidebar](/static/20-lab1/lab1_main_py_location.png)
+![Navigate to app/PortfolioAdvisor/main.py in the sidebar](/static/20-lab1/lab1_main_py_location.png)
 
 Replace the entire contents of `main.py` with the following:
 
@@ -219,61 +221,75 @@ log = app.logger
 # Exa AI MCP client for web search
 mcp_clients = [get_streamable_http_mcp_client()]
 
-# --- Customer Support Tools ---
+# --- Portfolio Advisor Tools ---
 
-RETURN_POLICIES = {
-    "electronics": {"window": "30 days", "condition": "Original packaging required, must be unused or defective", "refund": "Full refund to original payment method"},
-    "accessories": {"window": "14 days", "condition": "Must be in original packaging, unused", "refund": "Store credit or exchange"},
-    "audio": {"window": "30 days", "condition": "Defective items only after 15 days", "refund": "Full refund within 15 days, replacement after"},
+STOCKS = {
+    "AAPL": {"name": "Apple Inc.", "sector": "Technology", "price": 198.50, "pe_ratio": 32.1, "dividend_yield": 0.55, "analyst_rating": "Buy", "risk_level": "moderate", "market_cap": "3.0T", "description": "Consumer electronics, software, and services company"},
+    "MSFT": {"name": "Microsoft Corp.", "sector": "Technology", "price": 425.20, "pe_ratio": 36.8, "dividend_yield": 0.72, "analyst_rating": "Strong Buy", "risk_level": "low", "market_cap": "3.1T", "description": "Cloud computing, productivity software, and AI services"},
+    "JPM": {"name": "JPMorgan Chase & Co.", "sector": "Financials", "price": 215.30, "pe_ratio": 12.4, "dividend_yield": 2.15, "analyst_rating": "Buy", "risk_level": "moderate", "market_cap": "620B", "description": "Global financial services and investment banking"},
+    "GS": {"name": "Goldman Sachs Group Inc.", "sector": "Financials", "price": 485.60, "pe_ratio": 15.2, "dividend_yield": 2.35, "analyst_rating": "Hold", "risk_level": "moderate", "market_cap": "170B", "description": "Investment banking, securities, and asset management"},
+    "AMZN": {"name": "Amazon.com Inc.", "sector": "Technology", "price": 186.40, "pe_ratio": 58.3, "dividend_yield": 0.0, "analyst_rating": "Strong Buy", "risk_level": "moderate", "market_cap": "1.9T", "description": "E-commerce, cloud computing (AWS), and digital streaming"},
+    "V": {"name": "Visa Inc.", "sector": "Financials", "price": 289.70, "pe_ratio": 30.5, "dividend_yield": 0.75, "analyst_rating": "Buy", "risk_level": "low", "market_cap": "580B", "description": "Global payments technology and digital transactions"},
+    "UNH": {"name": "UnitedHealth Group Inc.", "sector": "Healthcare", "price": 520.80, "pe_ratio": 20.1, "dividend_yield": 1.45, "analyst_rating": "Buy", "risk_level": "low", "market_cap": "480B", "description": "Health insurance and healthcare services"},
+    "TSLA": {"name": "Tesla Inc.", "sector": "Consumer Discretionary", "price": 248.90, "pe_ratio": 68.5, "dividend_yield": 0.0, "analyst_rating": "Hold", "risk_level": "high", "market_cap": "790B", "description": "Electric vehicles, energy storage, and solar products"},
+    "BRK-B": {"name": "Berkshire Hathaway Inc.", "sector": "Financials", "price": 432.10, "pe_ratio": 9.8, "dividend_yield": 0.0, "analyst_rating": "Buy", "risk_level": "low", "market_cap": "950B", "description": "Diversified holding company — insurance, rail, utilities, manufacturing"},
+    "GOOG": {"name": "Alphabet Inc.", "sector": "Technology", "price": 172.30, "pe_ratio": 25.6, "dividend_yield": 0.45, "analyst_rating": "Strong Buy", "risk_level": "moderate", "market_cap": "2.1T", "description": "Search, advertising, cloud computing, and AI research"},
 }
 
-PRODUCTS = {
-    "PROD-001": {"name": "Wireless Headphones", "price": 79.99, "category": "audio", "description": "Noise-cancelling Bluetooth headphones with 30h battery life", "warranty_months": 12},
-    "PROD-002": {"name": "Smart Watch", "price": 249.99, "category": "electronics", "description": "Fitness tracker with heart rate monitor, GPS, and 5-day battery", "warranty_months": 24},
-    "PROD-003": {"name": "Laptop Stand", "price": 39.99, "category": "accessories", "description": "Adjustable aluminum laptop stand for ergonomic desk setup", "warranty_months": 6},
-    "PROD-004": {"name": "USB-C Hub", "price": 54.99, "category": "accessories", "description": "7-in-1 USB-C hub with HDMI, USB-A, SD card reader, and ethernet", "warranty_months": 12},
-    "PROD-005": {"name": "Mechanical Keyboard", "price": 129.99, "category": "electronics", "description": "RGB mechanical keyboard with Cherry MX switches", "warranty_months": 24},
+COMPLIANCE_RULES = {
+    "equity": {"description": "Standard equity (stock) trading", "min_order": 1, "max_order": 10000, "settlement": "T+1", "restrictions": "No trading during blackout periods. Insider trading rules apply.", "required_approvals": "None for orders under $100,000. Manager approval for orders $100,000+.", "hours": "9:30 AM - 4:00 PM ET (regular session)"},
+    "options": {"description": "Options contracts trading (calls and puts)", "min_order": 1, "max_order": 500, "settlement": "T+1", "restrictions": "Level 2+ options approval required. No naked calls without Level 4 approval.", "required_approvals": "Compliance review for positions exceeding $50,000 notional value.", "hours": "9:30 AM - 4:00 PM ET (regular session)"},
+    "margin": {"description": "Margin trading — borrowing funds to purchase securities", "min_order": 1, "max_order": 5000, "settlement": "T+1", "restrictions": "Maintenance margin of 25% required. Margin calls must be met within 3 business days.", "required_approvals": "Margin agreement on file. Compliance review for margin utilization above 70%.", "hours": "9:30 AM - 4:00 PM ET (regular session)"},
+    "short-selling": {"description": "Short selling — selling borrowed securities to buy back later", "min_order": 1, "max_order": 2000, "settlement": "T+1", "restrictions": "Locate requirement — shares must be available to borrow before shorting. Uptick rule applies.", "required_approvals": "Short-selling agreement required. Compliance pre-approval for positions above $200,000.", "hours": "9:30 AM - 4:00 PM ET (regular session)"},
 }
 
 @tool
-def get_return_policy(product_category: str) -> str:
-    """Get return policy information for a specific product category.
+def get_stock_analysis(ticker: str) -> str:
+    """Get stock analysis data including price, fundamentals, and risk profile.
 
     Args:
-        product_category: Product category (e.g., 'electronics', 'accessories', 'audio')
+        ticker: Stock ticker symbol (e.g., 'AAPL', 'MSFT', 'JPM')
 
     Returns:
-        Formatted return policy details including timeframes and conditions
+        Formatted stock analysis with price, PE ratio, dividend yield, analyst rating, and risk level
     """
-    category = product_category.lower()
-    if category in RETURN_POLICIES:
-        policy = RETURN_POLICIES[category]
-        return f"Return policy for {category}: Window: {policy['window']}, Condition: {policy['condition']}, Refund: {policy['refund']}"
-    return f"No specific return policy found for '{product_category}'. Please contact support for details."
+    ticker = ticker.upper()
+    if ticker in STOCKS:
+        s = STOCKS[ticker]
+        return (
+            f"{s['name']} ({ticker})\n"
+            f"  Sector: {s['sector']} | Market Cap: {s['market_cap']}\n"
+            f"  Price: ${s['price']} | P/E Ratio: {s['pe_ratio']}\n"
+            f"  Dividend Yield: {s['dividend_yield']}% | Analyst Rating: {s['analyst_rating']}\n"
+            f"  Risk Level: {s['risk_level']}\n"
+            f"  Description: {s['description']}"
+        )
+    return f"Unknown ticker symbol '{ticker}'. Available tickers: {', '.join(STOCKS.keys())}"
 
 @tool
-def get_product_info(query: str) -> str:
-    """Search for product information by name, ID, or keyword.
+def get_compliance_rules(trade_type: str) -> str:
+    """Get compliance rules for a specific trade type.
 
     Args:
-        query: Product name, ID (e.g., 'PROD-001'), or search keyword
+        trade_type: Type of trade (e.g., 'equity', 'options', 'margin', 'short-selling')
 
     Returns:
-        Product details including name, price, category, and description
+        Compliance rules including order limits, settlement, restrictions, and required approvals
     """
-    query_lower = query.lower()
-    # Search by ID
-    if query.upper() in PRODUCTS:
-        p = PRODUCTS[query.upper()]
-        return f"{p['name']} ({query.upper()}): ${p['price']}, Category: {p['category']}, {p['description']}, Warranty: {p['warranty_months']} months"
-    # Search by keyword
-    results = [f"{pid}: {p['name']} - ${p['price']} - {p['description']}" for pid, p in PRODUCTS.items()
-               if query_lower in p['name'].lower() or query_lower in p['description'].lower() or query_lower in p['category'].lower()]
-    if results:
-        return "Found products:\n" + "\n".join(results)
-    return f"No products found matching '{query}'."
+    trade_type = trade_type.lower()
+    if trade_type in COMPLIANCE_RULES:
+        r = COMPLIANCE_RULES[trade_type]
+        return (
+            f"Compliance Rules — {r['description']}\n"
+            f"  Order Range: {r['min_order']} - {r['max_order']} shares\n"
+            f"  Settlement: {r['settlement']}\n"
+            f"  Trading Hours: {r['hours']}\n"
+            f"  Restrictions: {r['restrictions']}\n"
+            f"  Required Approvals: {r['required_approvals']}"
+        )
+    return f"Unknown trade type '{trade_type}'. Available types: {', '.join(COMPLIANCE_RULES.keys())}"
 
-tools = [get_return_policy, get_product_info]
+tools = [get_stock_analysis, get_compliance_rules]
 
 # Add MCP client (Exa AI web search) to tools
 for mcp_client in mcp_clients:
@@ -289,17 +305,18 @@ def get_or_create_agent():
     if _agent is None:
         _agent = Agent(
             model=load_model(),
-            system_prompt="""You are a helpful and professional customer support assistant for an e-commerce company.
+            system_prompt="""You are a knowledgeable and professional portfolio advisor assistant for a capital markets firm.
 Your role is to:
-- Provide accurate information using the tools available to you
-- Be friendly, patient, and understanding with customers
-- Always offer additional help after answering questions
-- If you can't help with something, direct customers to the appropriate contact
+- Provide accurate stock analysis and market data using the tools available to you
+- Explain compliance rules clearly when asked about trading requirements
+- Be professional, precise, and thorough in your analysis
+- Always caveat that this is informational only and not personalized investment advice
+- If you can't help with something, direct the user to the appropriate compliance or research team
 
 You have access to the following tools:
-1. get_return_policy() - For return policy questions
-2. get_product_info() - To look up product information and specifications
-3. Web search - To search the web for troubleshooting help
+1. get_stock_analysis() - For stock fundamentals, risk profiles, and analyst ratings
+2. get_compliance_rules() - For trading compliance rules, restrictions, and approval requirements
+3. Web search - To search the web for market news and research
 
 Always use the appropriate tool to get accurate, up-to-date information rather than guessing.""",
             tools=tools
@@ -352,33 +369,33 @@ agentcore
 
 In the interactive prompt, try these queries:
 
-**Test the return policy tool:**
+**Test the stock analysis tool:**
 :::code{language=bash}
-What's the return policy for electronics?
+What's the analysis for AAPL?
 :::
 
-Expected: The agent calls `get_return_policy("electronics")` and returns the 30-day return window with conditions.
+Expected: The agent calls `get_stock_analysis("AAPL")` and returns Apple's price, PE ratio, analyst rating, and risk level.
 
-**Test the product info tool:**
+**Test the compliance rules tool:**
 :::code{language=bash}
-Tell me about the Wireless Headphones
+What are the compliance rules for options trading?
 :::
 
-Expected: The agent calls `get_product_info("headphones")` and returns product details, price, and warranty info.
+Expected: The agent calls `get_compliance_rules("options")` and returns order limits, restrictions, required approvals, and settlement info.
 
 **Test the web search:**
 :::code{language=bash}
-Search for common Bluetooth headphone troubleshooting tips
+Search for recent Federal Reserve interest rate decisions
 :::
 
-Expected: The agent uses the Exa AI MCP server to search the web and return relevant troubleshooting information.
+Expected: The agent uses the Exa AI MCP server to search the web and return relevant market news.
 
 **Test a multi-tool query:**
 :::code{language=bash}
-I bought a Smart Watch (PROD-002) and want to return it. What's the policy?
+I want to buy 200 shares of TSLA. What's the current risk profile and what compliance rules apply for equity trades?
 :::
 
-Expected: The agent calls both `get_product_info("PROD-002")` to identify the category and `get_return_policy("electronics")` to provide the return policy.
+Expected: The agent calls both `get_stock_analysis("TSLA")` to get the risk profile and `get_compliance_rules("equity")` to provide the applicable trading rules.
 
 Press `Esc` to exit the dev server when done.
 
@@ -446,9 +463,9 @@ When you ran `agentcore create`, the CLI:
 
 When you customized `main.py`, you:
 
-1. **Replaced the sample tool** with domain-specific tools (`get_return_policy`, `get_product_info`)
+1. **Replaced the sample tool** with domain-specific tools (`get_stock_analysis`, `get_compliance_rules`)
 2. **Kept the MCP client** (Exa AI) as the web search capability
-3. **Added a customer support system prompt** to guide the agent's behavior
+3. **Added a portfolio advisor system prompt** to guide the agent's behavior
 
 When you ran `agentcore dev`, the CLI:
 
@@ -465,11 +482,15 @@ When you ran `agentcore deploy`, the CLI:
 
 ## Congratulations!
 
-You've created the foundation of a customer support agent! In the next labs, you'll add:
-- **Lab 2:** Persistent memory for personalized conversations
+You've created the foundation of a portfolio advisor agent! In the next labs, you'll add:
+- **Lab 2:** Persistent memory for client personalization
 - **Lab 3:** Gateway for centralized, secure tool management
 - **Lab 4:** Production observability and session management
-- **Lab 5:** Continuous quality evaluation
-- **Lab 6:** Customer-facing chat interface
+- **Lab 5:** JWT authentication for runtime and gateway
+- **Lab 6:** Continuous quality evaluation
+- **Lab 7:** Client-facing portal interface
+- **Lab 8:** Governance policies for trade execution
+- **Lab 9:** VPC integration for FSI compliance
+- **Lab 10:** Cost optimization and session lifecycle
 
-→ Next: [Lab 2: Add Memory to Your Agent](../30-lab2-memory/)
+→ Next: [Lab 2: Add Memory to Your Agent](../30-lab2-personalize-add-memory/)

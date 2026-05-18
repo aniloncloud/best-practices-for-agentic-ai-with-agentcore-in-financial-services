@@ -1,5 +1,5 @@
 ---
-title: "Lab 7: Governing Agent Actions with Policies"
+title: "Lab 8: Governing Agent Actions with Policies"
 weight: 82
 ---
 
@@ -7,19 +7,23 @@ weight: 82
 
 ## Overview
 
-Your customer support agent is deployed, secured with JWT authentication, and monitored with evaluations. But authentication only answers *"who is calling?"* — it doesn't answer *"what are they allowed to do?"*
+Your portfolio advisor agent is deployed, secured with JWT authentication, and monitored with evaluations. But authentication only answers *"who is calling?"* — it doesn't answer *"what are they allowed to do?"*
 
-Consider this scenario: you add a refund processing tool to your agent. Should every authenticated user be able to issue refunds of any amount? What if a customer asks the agent to refund $10,000? Without governance, the agent will happily comply — it has no concept of business rules or spending limits.
+Consider this scenario: you add a trade execution tool to your agent. Should every authenticated user be able to execute trades of any size? What if a client asks the agent to execute a 10,000-share trade? Without governance, the agent will happily comply — it has no concept of business rules or position limits.
 
 **AgentCore Policy** solves this by adding fine-grained authorization at the Gateway boundary using [Cedar](https://www.cedarpolicy.com/) policies. Policies are evaluated deterministically *outside* the agent's code, so the agent can't accidentally bypass them — even if it's tricked by a clever prompt.
 
 ### What You'll Learn
 
-- Add a new refund tool to your existing Gateway
+- Add a new trade execution tool to your existing Gateway
 - Create a Policy Engine to store authorization rules
 - Write Cedar policies that restrict tool usage based on input parameters
 - Attach the Policy Engine to your Gateway in ENFORCE mode
 - Test that allowed actions succeed and denied actions are blocked — all from the chat UI
+
+:::alert{header="Compliance Disclaimer" type="warning"}
+The compliance rules and financial data in this workshop are **simulated for educational purposes only** and do not constitute actual regulatory guidance. Consult your compliance team for real-world implementations.
+:::
 
 ### Key Concepts
 
@@ -33,24 +37,24 @@ Consider this scenario: you add a refund processing tool to your agent. Should e
 
 ## Step 0: Set Up Your Terminals
 
-Lab 7 uses both the chat UI (to test policy enforcement) and the CLI (to create policies). You'll need two terminals running side by side.
+Lab 8 uses both the chat UI (to test policy enforcement) and the CLI (to create policies). You'll need two terminals running side by side.
 
 **Split your terminal** in Kiro — click the split terminal icon (⊞) in the terminal panel, or use `` Cmd+\ `` (macOS) / `` Ctrl+\ `` (Windows/Linux).
 
 **Terminal 1 — Frontend server:**
 
-Start the frontend from Lab 6:
+Start the frontend from Lab 7:
 
 ::::tabs{variant="container" groupId="os"}
 :::tab{label="macOS/Linux"}
 ```bash
-cd app/CustomerSupport/frontend
+cd app/PortfolioAdvisor/frontend
 uv run python frontend.py
 ```
 :::
 :::tab{label="Windows"}
 ```powershell
-cd app\CustomerSupport\frontend
+cd app\PortfolioAdvisor\frontend
 uv run python frontend.py
 
 ```
@@ -69,29 +73,29 @@ cd ../../..
 
 All CLI commands in this lab should be run in this terminal.
 
-## Step 1: Add the Refund Tool to Your Gateway
+## Step 1: Add the Trade Execution Tool to Your Gateway
 
-The prerequisites stack includes a Lambda function (`workshop-process-refund`) that simulates processing customer refunds. Let's expose it through your secured Gateway so the agent can call it.
+The prerequisites stack includes a Lambda function (`workshop-execute-trade`) that simulates executing stock trades. Let's expose it through your secured Gateway so the agent can call it.
 
 ### Retrieve the Lambda ARN
 
 ::::tabs{variant="container" groupId="os"}
 :::tab{label="macOS/Linux"}
 ```bash
-REFUND_LAMBDA_ARN=$(aws ssm get-parameter \
-  --name /app/customersupport/agentcore/refund_lambda_arn \
+TRADE_LAMBDA_ARN=$(aws ssm get-parameter \
+  --name /app/portfolioadvisor/agentcore/execute_trade_lambda_arn \
   --query 'Parameter.Value' --output text)
 
-echo "Refund Lambda ARN: $REFUND_LAMBDA_ARN"
+echo "Trade Lambda ARN: $TRADE_LAMBDA_ARN"
 ```
 :::
 :::tab{label="Windows"}
 ```powershell
-$REFUND_LAMBDA_ARN = aws ssm get-parameter `
-  --name /app/customersupport/agentcore/refund_lambda_arn `
+$TRADE_LAMBDA_ARN = aws ssm get-parameter `
+  --name /app/portfolioadvisor/agentcore/execute_trade_lambda_arn `
   --query 'Parameter.Value' --output text
 
-Write-Host "Refund Lambda ARN: $REFUND_LAMBDA_ARN"
+Write-Host "Trade Lambda ARN: $TRADE_LAMBDA_ARN"
 
 ```
 :::
@@ -99,63 +103,67 @@ Write-Host "Refund Lambda ARN: $REFUND_LAMBDA_ARN"
 
 ### Create the tool schema
 
-Create the schema file that describes the refund tool to the agent:
+Create the schema file that describes the trade execution tool to the agent:
 
 ::::tabs{variant="container" groupId="os"}
 :::tab{label="macOS/Linux"}
 ```bash
-touch app/CustomerSupport/tool/refund_schema.json
+touch app/PortfolioAdvisor/tool/trade_schema.json
 ```
 :::
 :::tab{label="Windows"}
 ```powershell
-New-Item app\CustomerSupport\tool\refund_schema.json -Force
+New-Item app\PortfolioAdvisor\tool\trade_schema.json -Force
 
 ```
 :::
 ::::
 
-Open `app/CustomerSupport/tool/refund_schema.json` in Kiro's editor and add:
+Open `app/PortfolioAdvisor/tool/trade_schema.json` in Kiro's editor and add:
 
 :::code{language=json}
 [
   {
-    "name": "process_refund",
-    "description": "Process a customer refund for a given order. Requires the order ID, refund amount in dollars, and a reason for the refund.",
+    "name": "execute_trade",
+    "description": "Execute a stock trade. Requires the ticker symbol, number of shares, order type (market or limit), and a reason for the trade.",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "order_id": {
+        "ticker": {
           "type": "string",
-          "description": "The order ID to refund (e.g., ORD-12345)"
+          "description": "Stock ticker symbol (e.g., AAPL, MSFT, JPM)"
         },
-        "amount": {
+        "quantity": {
           "type": "integer",
-          "description": "Refund amount in whole dollars"
+          "description": "Number of shares to trade"
+        },
+        "order_type": {
+          "type": "string",
+          "description": "Order type: 'market' or 'limit'"
         },
         "reason": {
           "type": "string",
-          "description": "Reason for the refund (e.g., defective item, wrong product, customer dissatisfied)"
+          "description": "Reason for the trade"
         }
       },
-      "required": ["order_id", "amount", "reason"]
+      "required": ["ticker", "quantity", "order_type", "reason"]
     }
   }
 ]
 :::
 
-> **Why `"type": "integer"`?** Cedar uses Long type for whole numbers, which maps directly from JSON Schema `integer`. This lets us write simple comparisons like `context.input.amount < 100` in our policies. If we used `"type": "number"` (which maps to Cedar Decimal), we'd need the more verbose `.lessThan(decimal("100.00"))` syntax.
+> **Why `"type": "integer"`?** Cedar uses Long type for whole numbers, which maps directly from JSON Schema `integer`. This lets us write simple comparisons like `context.input.quantity < 1000` in our policies. If we used `"type": "number"` (which maps to Cedar Decimal), we'd need the more verbose `.lessThan(decimal("1000.00"))` syntax.
 
-### Add the refund target to the Gateway
+### Add the trade execution target to the Gateway
 
 ::::tabs{variant="container" groupId="os"}
 :::tab{label="macOS/Linux"}
 ```bash
 agentcore add gateway-target \
   --type lambda-function-arn \
-  --name ProcessRefund \
-  --lambda-arn $REFUND_LAMBDA_ARN \
-  --tool-schema-file app/CustomerSupport/tool/refund_schema.json \
+  --name ExecuteTrade \
+  --lambda-arn $TRADE_LAMBDA_ARN \
+  --tool-schema-file app/PortfolioAdvisor/tool/trade_schema.json \
   --gateway my-gateway-secure
 ```
 :::
@@ -163,9 +171,9 @@ agentcore add gateway-target \
 ```powershell
 agentcore add gateway-target `
   --type lambda-function-arn `
-  --name ProcessRefund `
-  --lambda-arn $REFUND_LAMBDA_ARN `
-  --tool-schema-file app/CustomerSupport/tool/refund_schema.json `
+  --name ExecuteTrade `
+  --lambda-arn $TRADE_LAMBDA_ARN `
+  --tool-schema-file app/PortfolioAdvisor/tool/trade_schema.json `
   --gateway my-gateway-secure
 
 ```
@@ -178,26 +186,26 @@ agentcore add gateway-target `
 agentcore deploy -y -v
 :::
 
-### Test the refund tool (no policy yet)
+### Test the trade execution tool (no policy yet)
 
-At this point, the refund tool is available but has no policy restrictions. Open your browser at **http://localhost:8501** (the Flask frontend from Lab 6) and try:
+At this point, the trade execution tool is available but has no policy restrictions. Open your browser at **http://localhost:8501** (the Flask frontend from Lab 7) and try:
 
 :::code{language=bash showCopyAction=true}
-I'd like a refund of $500 for order ORD-12345 because the item was defective
+Execute a trade: buy 500 shares of AAPL at market price for portfolio rebalancing
 :::
 
-The agent should successfully process the refund — there's nothing stopping it. Any authenticated user can request any refund amount. Let's fix that.
+The agent should successfully execute the trade — there's nothing stopping it. Any authenticated user can request a trade of any size. Let's fix that.
 
 ## Step 2: Create a Policy Engine and Attach to Gateway
 
-A Policy Engine is a container that holds your Cedar policies and evaluates them against incoming requests. Create one for your customer support application and attach it to your gateway:
+A Policy Engine is a container that holds your Cedar policies and evaluates them against incoming requests. Create one for your portfolio advisor application and attach it to your gateway:
 
 ::::tabs{variant="container" groupId="os"}
 :::tab{label="macOS/Linux"}
 ```bash
 agentcore add policy-engine \
-  --name CustomerSupportPolicyEngine \
-  --description "Governs customer support agent tool access — refund limits and tool permissions" \
+  --name PortfolioAdvisorPolicyEngine \
+  --description "Governs portfolio advisor agent tool access — trade limits and tool permissions" \
   --attach-to-gateways my-gateway-secure \
   --attach-mode ENFORCE
 ```
@@ -205,8 +213,8 @@ agentcore add policy-engine \
 :::tab{label="Windows"}
 ```powershell
 agentcore add policy-engine `
-  --name CustomerSupportPolicyEngine `
-  --description "Governs customer support agent tool access - refund limits and tool permissions" `
+  --name PortfolioAdvisorPolicyEngine `
+  --description "Governs portfolio advisor agent tool access - trade limits and tool permissions" `
   --attach-to-gateways my-gateway-secure `
   --attach-mode ENFORCE
 
@@ -217,17 +225,18 @@ agentcore add policy-engine `
 You should see output like:
 
 :::code{language=bash showCopyAction=false}
-Added policy engine 'CustomerSupportPolicyEngine'
+Added policy engine 'PortfolioAdvisorPolicyEngine'
 :::
 
 > **ENFORCE vs LOG_ONLY:** In `ENFORCE` mode, denied requests are blocked and the tool call fails. In `LOG_ONLY` mode, all requests are allowed but policy decisions are logged to CloudWatch — useful for testing policies before enforcing them.
 
 ## Step 3: Create Cedar Policies
 
-Now write the authorization rules. We'll create two policies:
+Now write the authorization rules. We'll create three policies:
 
-1. **Permit refunds under $100** — allows the refund tool only for small amounts
-2. **Permit warranty checks** — explicitly allows the existing warranty tool for all users
+1. **Permit trades under 1000 shares** — allows the trade execution tool only for smaller position sizes
+2. **Permit portfolio risk check access** — explicitly allows the existing portfolio risk check tool for all users
+3. **Block restricted tickers** — forbids trading in securities on the restricted list
 
 First, retrieve your Gateway ARN — you'll need it in the Cedar policy statements:
 
@@ -263,27 +272,27 @@ Write-Host "Gateway ARN: $GATEWAY_ARN"
 
 > **Note:** You can also find the Gateway ARN in `agentcore/.cli/deployed-state.json` or from the `agentcore status` output.
 
-### Policy 1: Refund limit
+### Policy 1: Trade quantity limit
 
-This policy permits the `process_refund` tool only when the amount is less than 100:
+This policy permits the `execute_trade` tool only when the quantity is less than 1000 shares:
 
 :::code{language=cedar showCopyAction=false}
 permit(
   principal,
-  action == AgentCore::Action::"ProcessRefund___process_refund",
+  action == AgentCore::Action::"ExecuteTrade___execute_trade",
   resource == AgentCore::Gateway::"<YOUR_GATEWAY_ARN>"
 )
 when {
-  ((context.input).amount) < 100
+  context.input.quantity < 1000
 };
 :::
 
 > **Understanding the Cedar syntax:**
 > - `permit` — allows the action (Cedar also supports `forbid` to deny)
 > - `principal` — any authenticated user (from the JWT token)
-> - `action == AgentCore::Action::"ProcessRefund___process_refund"` — the specific tool (format: `TargetName___tool_name` with triple underscores)
+> - `action == AgentCore::Action::"ExecuteTrade___execute_trade"` — the specific tool (format: `TargetName___tool_name` with triple underscores)
 > - `resource == AgentCore::Gateway::"<arn>"` — scoped to your Gateway ARN
-> - `when { context.input.amount < 100 }` — only when the refund amount is under $100
+> - `when { context.input.quantity < 1000 }` — only when the trade quantity is under 1000 shares
 
 Now create this policy using the CLI:
 
@@ -291,52 +300,93 @@ Now create this policy using the CLI:
 :::tab{label="macOS/Linux"}
 ```bash
 agentcore add policy \
-  --name refund_limit_policy \
-  --engine CustomerSupportPolicyEngine \
-  --description "Allow refunds under 100 dollars only" \
-  --statement "permit(principal, action == AgentCore::Action::\"ProcessRefund___process_refund\", resource == AgentCore::Gateway::\"${GATEWAY_ARN}\") when { context.input.amount < 100 };"
+  --name trade_quantity_limit \
+  --engine PortfolioAdvisorPolicyEngine \
+  --description "Allow trades under 1000 shares only" \
+  --statement "permit(principal, action == AgentCore::Action::\"ExecuteTrade___execute_trade\", resource == AgentCore::Gateway::\"${GATEWAY_ARN}\") when { context.input.quantity < 1000 };"
 ```
 :::
 :::tab{label="Windows"}
 ```powershell
-$statement = 'permit(principal, action == AgentCore::Action::"ProcessRefund___process_refund", resource == AgentCore::Gateway::"' + $GATEWAY_ARN + '") when { context.input.amount < 100 };'
+$statement = 'permit(principal, action == AgentCore::Action::"ExecuteTrade___execute_trade", resource == AgentCore::Gateway::"' + $GATEWAY_ARN + '") when { context.input.quantity < 1000 };'
 
 agentcore add policy `
-  --name refund_limit_policy `
-  --engine CustomerSupportPolicyEngine `
-  --description "Allow refunds under 100 dollars only" `
+  --name trade_quantity_limit `
+  --engine PortfolioAdvisorPolicyEngine `
+  --description "Allow trades under 1000 shares only" `
   --statement $statement
 
 ```
 :::
 ::::
 
-### Policy 2: Warranty check access
+### Policy 2: Portfolio risk check access
 
-This policy permits the warranty check tool unconditionally for all authenticated users:
+This policy permits the portfolio risk check tool unconditionally for all authenticated users:
 
-:::alert[Cedar uses **default deny** — once you attach a Policy Engine in ENFORCE mode, every tool call through the Gateway needs an explicit `permit` policy to succeed. Without this policy, the warranty check tool (which worked fine before) would start failing with authorization errors. This policy preserves existing functionality.]{header="Why is this policy needed?"}
+:::alert[Cedar uses **default deny** — once you attach a Policy Engine in ENFORCE mode, every tool call through the Gateway needs an explicit `permit` policy to succeed. Without this policy, the portfolio risk check tool (which worked fine before) would start failing with authorization errors. This policy preserves existing functionality.]{header="Why is this policy needed?"}
 :::
 
 ::::tabs{variant="container" groupId="os"}
 :::tab{label="macOS/Linux"}
 ```bash
 agentcore add policy \
-  --name warranty_check_policy \
-  --engine CustomerSupportPolicyEngine \
-  --description "Allow all authenticated users to check warranties" \
-  --statement "permit(principal, action == AgentCore::Action::\"WarrantyCheck___check_warranty\", resource == AgentCore::Gateway::\"${GATEWAY_ARN}\") when { (principal is AgentCore::OAuthUser) };" \
+  --name portfolio_risk_check_policy \
+  --engine PortfolioAdvisorPolicyEngine \
+  --description "Allow all authenticated users to check portfolio risk" \
+  --statement "permit(principal, action == AgentCore::Action::\"PortfolioRiskCheck___check_portfolio_risk\", resource == AgentCore::Gateway::\"${GATEWAY_ARN}\") when { (principal is AgentCore::OAuthUser) };" \
   --validation-mode IGNORE_ALL_FINDINGS
 ```
 :::
 :::tab{label="Windows"}
 ```powershell
-$statement = 'permit(principal, action == AgentCore::Action::"WarrantyCheck___check_warranty", resource == AgentCore::Gateway::"' + $GATEWAY_ARN + '") when { (principal is AgentCore::OAuthUser) };'
+$statement = 'permit(principal, action == AgentCore::Action::"PortfolioRiskCheck___check_portfolio_risk", resource == AgentCore::Gateway::"' + $GATEWAY_ARN + '") when { (principal is AgentCore::OAuthUser) };'
 
 agentcore add policy `
-  --name warranty_check_policy `
-  --engine CustomerSupportPolicyEngine `
-  --description "Allow all authenticated users to check warranties" `
+  --name portfolio_risk_check_policy `
+  --engine PortfolioAdvisorPolicyEngine `
+  --description "Allow all authenticated users to check portfolio risk" `
+  --statement $statement `
+  --validation-mode IGNORE_ALL_FINDINGS
+
+```
+:::
+::::
+
+### Policy 3: Restricted ticker block
+
+This policy forbids trading in securities that appear on the firm's restricted list — regardless of any permit policies that would otherwise apply. Cedar's `forbid` always overrides `permit`:
+
+:::code{language=cedar showCopyAction=false}
+forbid(
+  principal,
+  action == AgentCore::Action::"ExecuteTrade___execute_trade",
+  resource == AgentCore::Gateway::"<YOUR_GATEWAY_ARN>"
+)
+when {
+  ["RESTRICTED-001", "RESTRICTED-002"].contains(context.input.ticker)
+};
+:::
+
+::::tabs{variant="container" groupId="os"}
+:::tab{label="macOS/Linux"}
+```bash
+agentcore add policy \
+  --name restricted_ticker_policy \
+  --engine PortfolioAdvisorPolicyEngine \
+  --description "Block trades on restricted securities" \
+  --statement "forbid(principal, action == AgentCore::Action::\"ExecuteTrade___execute_trade\", resource == AgentCore::Gateway::\"${GATEWAY_ARN}\") when { [\"RESTRICTED-001\", \"RESTRICTED-002\"].contains(context.input.ticker) };" \
+  --validation-mode IGNORE_ALL_FINDINGS
+```
+:::
+:::tab{label="Windows"}
+```powershell
+$statement = 'forbid(principal, action == AgentCore::Action::"ExecuteTrade___execute_trade", resource == AgentCore::Gateway::"' + $GATEWAY_ARN + '") when { ["RESTRICTED-001", "RESTRICTED-002"].contains(context.input.ticker) };'
+
+agentcore add policy `
+  --name restricted_ticker_policy `
+  --engine PortfolioAdvisorPolicyEngine `
+  --description "Block trades on restricted securities" `
   --statement $statement `
   --validation-mode IGNORE_ALL_FINDINGS
 
@@ -352,62 +402,62 @@ agentcore deploy -y -v
 
 ## Step 4: Test Policy Enforcement via the Chat UI
 
-Open your browser at **http://localhost:8501**. The agent now has the refund tool available, but it's governed by your Cedar policies.
+Open your browser at **http://localhost:8501**. The agent now has the trade execution tool available, but it's governed by your Cedar policies.
 
-Use the credentials you created in Lab 4:
+Use the credentials you created in Lab 5:
 
 - **Email:** `workshopuser@example.com`
 - **Password:** `WorkshopPass1!`
 
-### Test 1: Small refund (should succeed ✅)
+### Test 1: Small trade (should succeed ✅)
 
 Type in the chat:
 
 :::code{language=bash showCopyAction=true}
-I need a refund of $50 for order ORD-12345. The item arrived damaged.
+Execute a trade: buy 500 shares of AAPL at market price for portfolio rebalancing
 :::
 
-**Expected:** The agent calls `process_refund` with amount=50. The policy permits it (50 < 100), and the refund is processed successfully.
+**Expected:** The agent calls `execute_trade` with quantity=500. The policy permits it (500 < 1000), and the trade is executed successfully.
 
-### Test 2: Large refund (should be denied ❌)
+### Test 2: Large trade (should be denied ❌)
 
 Type in the chat:
 
 :::code{language=bash showCopyAction=true}
-Actually, can you process a refund of $500 for order ORD-67890? I want a full refund.
+I need to buy 5000 shares of MSFT at limit price for a large client position
 :::
 
-**Expected:** The agent tries to call `process_refund` with amount=500. The policy denies it (500 ≥ 100), and the Gateway returns an authorization error. The agent should inform the customer that the refund cannot be processed and suggest contacting a supervisor or support team.
+**Expected:** The agent tries to call `execute_trade` with quantity=5000. The policy denies it (5000 ≥ 1000), and the Gateway returns an authorization error. The agent should inform the client that the trade cannot be executed and suggest escalating to a senior advisor.
 
-### Test 3: Warranty check (should succeed ✅)
+### Test 3: Portfolio risk check (should succeed ✅)
 
 Type in the chat:
 
 :::code{language=bash showCopyAction=true}
-Check the warranty for PROD-002
+Check the portfolio risk for PORT-002
 :::
 
-**Expected:** The warranty check works as before — the policy explicitly permits it for all users.
+**Expected:** The portfolio risk check works as before — the policy explicitly permits it for all authenticated users.
 
 ### What's happening behind the scenes
 
 :::code{language=bash showCopyAction=false}
-User: "Refund $500 for order ORD-67890"
+User: "Buy 5000 shares of MSFT at limit price"
     ↓
-Agent decides to call process_refund(amount=500, order_id="ORD-67890", reason="full refund")
+Agent decides to call execute_trade(ticker="MSFT", quantity=5000, order_type="limit", reason="large client position")
     ↓
 MCP Client sends request to Gateway
     ↓
 Gateway intercepts request → Policy Engine evaluates Cedar policies
     ↓
-Cedar evaluation: amount=500, policy requires amount < 100 → DENY
+Cedar evaluation: quantity=5000, policy requires quantity < 1000 → DENY
     ↓
 Gateway returns authorization error to agent
     ↓
-Agent tells user: "I'm unable to process this refund..."
+Agent tells user: "I'm unable to execute this trade..."
 :::
 
-The key insight: **the agent code never changed, and neither did the Lambda function code**. The refund tool was discovered automatically via the Gateway MCP client, and the policy enforcement happens entirely at the Gateway boundary — before the request ever reaches the Lambda. The agent simply receives an error when a policy denies the action.
+The key insight: **the agent code never changed, and neither did the Lambda function code**. The trade execution tool was discovered automatically via the Gateway MCP client, and the policy enforcement happens entirely at the Gateway boundary — before the request ever reaches the Lambda. The agent simply receives an error when a policy denies the action.
 
 ## Step 5: (Bonus) Generate a Policy from Natural Language
 
@@ -417,18 +467,18 @@ AgentCore Policy can generate Cedar policies from plain English descriptions. Th
 :::tab{label="macOS/Linux"}
 ```bash
 agentcore add policy \
-  --name refund_reason_policy \
-  --engine CustomerSupportPolicyEngine \
-  --generate "Forbid refunds when the reason does not contain the word defective" \
+  --name order_type_restriction \
+  --engine PortfolioAdvisorPolicyEngine \
+  --generate "Forbid trades unless the order_type is limit" \
   --gateway my-gateway-secure
 ```
 :::
 :::tab{label="Windows"}
 ```powershell
 agentcore add policy `
-  --name refund_reason_policy `
-  --engine CustomerSupportPolicyEngine `
-  --generate "Forbid refunds when the reason does not contain the word defective" `
+  --name order_type_restriction `
+  --engine PortfolioAdvisorPolicyEngine `
+  --generate "Forbid trades unless the order_type is limit" `
   --gateway my-gateway-secure
 
 ```
@@ -443,17 +493,17 @@ Open `agentcore/agentcore.json` and look at the new policy entry under `policyEn
 
 :::code{language=json showCopyAction=false}
 {
-  "name": "refund_reason_policy",
-  "statement": "forbid(\n  principal,\n  action == AgentCore::Action::\"ProcessRefund___process_refund\",\n  resource == AgentCore::Gateway::\"<YOUR_GATEWAY_ARN>\"\n) unless {\n  ((context.input).reason) like \"*defective*\"\n};",
+  "name": "order_type_restriction",
+  "statement": "forbid(\n  principal,\n  action == AgentCore::Action::\"ExecuteTrade___execute_trade\",\n  resource == AgentCore::Gateway::\"<YOUR_GATEWAY_ARN>\"\n) unless {\n  ((context.input).order_type) == \"limit\"\n};",
   "validationMode": "FAIL_ON_ANY_FINDINGS"
 }
 :::
 
 Notice how the CLI automatically:
-- Identified the correct action name (`ProcessRefund___process_refund`)
+- Identified the correct action name (`ExecuteTrade___execute_trade`)
 - Scoped the policy to your gateway ARN
-- Translated "does not contain the word defective" into Cedar's `forbid ... unless { reason like "*defective*" }` pattern
-- Used `forbid` with `unless` — this means the refund is **blocked** unless the reason contains "defective". Since Cedar's `forbid` overrides `permit`, this policy takes precedence over the amount-based permit policy
+- Translated "unless the order_type is limit" into Cedar's `forbid ... unless { order_type == "limit" }` pattern
+- Used `forbid` with `unless` — this means the trade is **blocked** unless the order type is `limit`. Since Cedar's `forbid` overrides `permit`, this policy takes precedence over the quantity-based permit policy
 
 ### Deploy the generated policy
 
@@ -461,18 +511,18 @@ Notice how the CLI automatically:
 agentcore deploy -y -v
 :::
 
-### Test the refund reason policy
+### Test the order type restriction
 
-Try a refund with "defective" in the reason (should succeed ✅):
+Try a limit order (should succeed ✅):
 
 :::code{language=bash showCopyAction=true}
-I need a refund of $50 for order ORD-99999 because the item was defective
+Execute a trade: buy 200 shares of JPM as a limit order for dividend capture
 :::
 
-Try a refund without "defective" in the reason (should be denied ❌):
+Try a market order (should be denied ❌):
 
 :::code{language=bash showCopyAction=true}
-I need a refund of $50 for order ORD-11111 because I changed my mind
+Execute a trade: buy 200 shares of JPM as a market order for dividend capture
 :::
 
 ## Architecture
@@ -484,16 +534,16 @@ User (browser at localhost:8501)
     ↓
 Flask backend → AgentCore Runtime (with JWT)
     ↓
-AgentCore Runtime (CustomerSupport)
-    ├── Local tools: get_return_policy(), get_product_info()
+AgentCore Runtime (PortfolioAdvisor)
+    ├── Local tools: get_market_data(), get_portfolio_info()
     ├── MCP Client → Exa AI (web search)
     └── MCP Client → AgentCore Gateway (secured + policy enforced)
                           ↓
                     Policy Engine evaluates Cedar policies
                           ↓
-                    ✅ WarrantyCheck__check_warranty (always permitted)
-                    ✅ RefundTarget__process_refund (amount < $100)
-                    ❌ RefundTarget__process_refund (amount ≥ $100) → DENIED
+                    ✅ PortfolioRiskCheck___check_portfolio_risk (always permitted)
+                    ✅ ExecuteTrade___execute_trade (quantity < 1000)
+                    ❌ ExecuteTrade___execute_trade (quantity >= 1000) → DENIED
 :::
 
 Overall architecture now looks like the following:
@@ -504,18 +554,18 @@ Overall architecture now looks like the following:
 
 You added governance to your agent without changing a single line of agent code:
 
-1. **Added a refund tool** — Exposed a new Lambda function through the existing Gateway
+1. **Added a trade execution tool** — Exposed a new Lambda function through the existing Gateway
 2. **Created a Policy Engine** — A container for your authorization rules
-3. **Wrote Cedar policies** — Declarative rules that permit or deny tool access based on input parameters
+3. **Wrote Cedar policies** — Declarative rules that permit or deny tool access based on input parameters (trade quantity, restricted tickers)
 4. **Attached to Gateway in ENFORCE mode** — Every tool call is now evaluated against your policies
-5. **Tested via the UI** — Small refunds succeed, large refunds are blocked
+5. **Tested via the UI** — Small trades succeed, oversized trades and restricted securities are blocked
 
 ### Why This Matters
 
 | Without Policy | With Policy |
 |---------------|-------------|
 | Any authenticated user can call any tool | Fine-grained control over what each tool can do |
-| Agent decides whether to process a $10,000 refund | Gateway blocks it before it reaches the Lambda |
+| Agent decides whether to execute a 10,000-share trade | Gateway blocks it before it reaches the Lambda |
 | Business rules live in prompt engineering (fragile) | Business rules are deterministic Cedar policies (reliable) |
 | No audit trail of authorization decisions | Every decision logged to CloudWatch |
 | Changing rules means changing agent code | Changing rules means updating a policy — no redeploy needed |
@@ -524,9 +574,9 @@ You added governance to your agent without changing a single line of agent code:
 
 | Pattern | Example |
 |---------|---------|
-| Amount limits | `context.input.amount < 1000` |
-| Role-based access | `principal.getTag("role") == "manager"` |
-| Required fields | `forbid ... unless { context.input has description }` |
+| Quantity limits | `context.input.quantity < 1000` |
+| Role-based access | `principal.getTag("role") == "senior_advisor"` |
+| Required fields | `forbid ... unless { context.input has reason }` |
 | Regional restrictions | `["US", "CA"].contains(context.input.region)` |
 | Emergency shutdown | `forbid(principal, action, resource)` |
 
@@ -535,13 +585,13 @@ You added governance to your agent without changing a single line of agent code:
 Your agent now has deterministic governance:
 
 - ✅ **Policy Engine** — Cedar-based authorization for all Gateway tools
-- ✅ **Fine-grained control** — Refund amounts capped at $100
+- ✅ **Fine-grained control** — Trade quantities capped at 1000 shares per request
+- ✅ **Restricted securities** — Trades on restricted tickers blocked at the Gateway
 - ✅ **No code changes** — Policies enforce at the Gateway boundary, outside agent code
-- ✅ **Audit trail** — Every policy decision logged to CloudWatch
 - ✅ **Natural language authoring** — Generate Cedar policies from plain English
 
 ### What's Next
 
-You've completed the full workshop! Head to the summary to review everything you've built.
+In Lab 9, you'll deploy your agent into a VPC for private network isolation — a critical requirement for financial services workloads.
 
-→ Next: [Summary](../90-summary/)
+→ Next: [Lab 9: VPC Integration for FSI](../85-lab8-vpc-integration/)
