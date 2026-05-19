@@ -1,0 +1,12 @@
+{
+  "version": "0.1",
+  "runtimes": [
+    {
+      "name": "PortfolioAdvisor",
+      "description": "Capital markets portfolio advisor agent — stock analysis, compliance rules, and portfolio risk assessment",
+      "model": "us.anthropic.claude-sonnet-4-20250514-v1:0",
+      "instructionSet": "You are a portfolio advisor for a capital markets firm. You help clients with stock analysis, compliance rules, and portfolio risk assessment. Always provide clear, data-driven insights and flag any compliance concerns proactively.",
+      "codeDirectory": "../app/PortfolioAdvisor"
+    }
+  ]
+}
