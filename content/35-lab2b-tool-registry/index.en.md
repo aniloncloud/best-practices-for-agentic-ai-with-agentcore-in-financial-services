@@ -33,6 +33,22 @@ In Lab 2, you registered Lambda functions as Gateway tools. But in an enterprise
 | **Semantic Search** | Agents discover tools by intent ("get stock price") not just by exact name |
 | **Default Deny** | Tools not in the Gateway don't exist to the agent — zero access by default |
 
+### What You're Building
+
+:::code{language=bash showCopyAction=false}
+AgentCore Gateway (my-gateway) — Enterprise Tool Registry
+    ├── PortfolioRiskCheck (Lambda)     [Approved: Lab 2]
+    ├── ExecuteTrade (Lambda)           [Approved: Lab 2]
+    │
+    └── MarketData (MCP Server)         [Approved: THIS LAB]  ← NEW
+            ├── get_market_quote
+            ├── get_historical_prices
+            └── get_sector_performance
+                    ↑
+        Gateway synchronizes tool schemas from MCP server
+        Agent discovers tools automatically via semantic search
+:::
+
 ## Step 1: Inspect the Current Registry
 
 Your Gateway from Lab 2 already has two approved tools. Let's see what's registered:

@@ -21,6 +21,27 @@ Your agent is deployed and secured — but clients need a browser-based way to i
 The `invoke_agent_runtime` boto3 API does not support JWT bearer token invocation. Instead, the Flask backend calls the AgentCore REST API directly using the `requests` library with an `Authorization: Bearer` header, as documented in the [AgentCore Runtime OAuth guide](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-oauth.html).
 :::
 
+### What You're Building
+
+:::code{language=bash showCopyAction=false}
+Browser (localhost:5000)  ← THIS LAB
+    │
+    ├── /login ──▶ Cognito Hosted UI (OAuth 2.0 code flow)
+    │                    │
+    │                    ▼
+    │              JWT access token
+    │
+    ├── /chat ──▶ Flask backend
+    │                │
+    │                ▼ (Bearer token in header)
+    │          AgentCore Runtime REST API
+    │                │
+    │                ▼
+    │          Agent response (streamed)
+    │
+    └── Browser renders response in real-time
+:::
+
 ## Step 1: Install Dependencies
 
 ::::tabs{variant="container" groupId="os"}

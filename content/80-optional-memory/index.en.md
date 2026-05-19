@@ -14,6 +14,22 @@ Without memory, every conversation starts from zero. Clients must repeat their i
 
 In this lab you'll add memory to your deployed `PortfolioAdvisor` agent and verify that preferences introduced in one session are recalled automatically in a brand-new session.
 
+### What You're Building
+
+:::code{language=bash showCopyAction=false}
+Session 1: "I prefer conservative tech stocks"
+    ↓
+AgentCore Runtime → AgentCore Memory  ← THIS LAB
+                        │
+                        ├── SEMANTIC: extracts facts & preferences
+                        └── SUMMARIZATION: compresses conversation history
+                        │
+                        ▼ (persisted per user)
+Session 2: "What should I look at today?"
+    ↓
+Agent recalls: "You prefer conservative tech stocks" ── no repetition needed
+:::
+
 ## Step 1: Add Memory to Your Project
 
 Use the AgentCore CLI to add a memory resource:

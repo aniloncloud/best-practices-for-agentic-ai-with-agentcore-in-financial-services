@@ -25,6 +25,25 @@ Your portfolio advisor is deployed, secured, and evaluated — but in production
 - **Chargebacks** demand metrics broken down by business unit
 :::
 
+### What You're Optimizing
+
+:::code{language=bash showCopyAction=false}
+┌──────────────────────────────────────────────────────┐
+│  Cost Levers  ← THIS LAB                            │
+│                                                      │
+│  1. Session lifecycle                                │
+│     idle timeout: 15 min → 5 min                     │
+│     max lifetime: 8 hr → 2 hr                        │
+│                                                      │
+│  2. Evaluation sampling                              │
+│     100% → 20% (production-appropriate)              │
+│                                                      │
+│  3. Token monitoring dashboard                       │
+│     input/output tokens per session                  │
+│     cost allocation by session ID                    │
+└──────────────────────────────────────────────────────┘
+:::
+
 ## Step 1: Configure Session Lifecycle
 
 Sessions hold agent state (conversation history, tool context) in memory. Idle sessions waste resources. The defaults — 15-minute idle timeout, 8-hour max lifetime — are generous for a workshop but expensive in production.
