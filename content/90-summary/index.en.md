@@ -5,40 +5,45 @@ weight: 90
 
 ## What You Built
 
-Over the course of this workshop, you went from zero to a production-ready portfolio advisor agent using the AgentCore CLI and Kiro IDE:
+Over the course of this workshop, you deployed a production-ready portfolio advisor agent using the AgentCore CLI:
+
+### Core Labs
 
 | Lab | What You Did | AgentCore Services |
 |-----|-------------|-------------------|
-| 1 | Scaffolded a project, added stock analysis and compliance tools, tested locally with `agentcore dev` | AgentCore CLI, AgentCore Runtime (local) |
-| 2 | Added persistent memory so the agent remembers client preferences and conversation summaries across sessions, first deploy to cloud | AgentCore Memory, AgentCore Runtime |
-| 3 | MCPified an existing Lambda function (portfolio risk check) through AgentCore Gateway so any agent can discover and call it | AgentCore Gateway |
-| 4 | Explored session management and observability — traces, logs, and metrics in CloudWatch | AgentCore Observability |
-| 5 | Secured the runtime and gateway with Cognito JWT authentication, end-to-end token propagation | AgentCore Identity |
-| 6 | Configured continuous quality monitoring with built-in evaluators (goal success, correctness, tool selection) | AgentCore Evaluations |
-| 7 | Built a web chat interface with Cognito login that connects to the deployed agent | Combining all |
-| 8 | Added fine-grained governance with Cedar policies to control trade execution based on quantity, ticker restrictions, and order type | AgentCore Policy |
-| 9 | Deployed the agent into a VPC for private network isolation with VPC endpoints for AWS service connectivity | AgentCore Runtime (VPC mode) |
-| 10 | Optimized session lifecycle, evaluation sampling rate, and built a CloudWatch cost monitoring dashboard | Cost optimization |
+| Foundations | Learned agent planning, observability strategy, "no code changes" philosophy | (reading — no services) |
+| 1 | Deployed pre-built agent to cloud | AgentCore Runtime |
+| 1B | Explored traces, session isolation, token metrics, CloudWatch dashboards | CloudWatch GenAI Observability |
+| 2 | Centralized tools via Gateway, learned JWT passthrough and IAM credential patterns | AgentCore Gateway |
+| 3 | Secured Runtime and Gateway with Cognito JWT authentication | AgentCore Identity |
+| 4 | Added Cedar policies for trade limits and restricted tickers, explored agentic explainability | AgentCore Policy |
+| 5 | Configured continuous quality monitoring with built-in evaluators | AgentCore Evaluations |
+| 6 | Deployed agent into VPC with private subnet isolation and VPC endpoints | AgentCore Runtime (VPC mode) |
+
+### Optional Labs
+
+| Lab | What You Did | AgentCore Services |
+|-----|-------------|-------------------|
+| 2B | Reviewed and approved a Market Data MCP server through enterprise tool governance workflow | AgentCore Gateway (Registry) |
+| 7 | Added persistent memory with SEMANTIC and SUMMARIZATION strategies | AgentCore Memory |
+| 8 | Built a web chat interface with Cognito login connected to the deployed agent | All services combined |
+| 9 | Optimized session lifecycle, evaluation sampling rate, and built a cost monitoring dashboard | Cost optimization |
 
 ## Key Takeaways
 
 **The AgentCore CLI abstracts infrastructure complexity.** You never wrote a Dockerfile, configured an ECR repository, or manually created IAM roles. A single `agentcore deploy` handled packaging, uploading, provisioning, and wiring everything together.
 
-**AgentCore is framework and model agnostic.** This workshop used Strands Agents with Claude on Bedrock, but the same CLI and runtime work with LangGraph, CrewAI, OpenAI Agents SDK, Google ADK, and any foundation model.
+**Gateway centralizes tool access.** Organizations already have valuable business logic in Lambda functions and APIs. Gateway lets you MCPify them — exposing them as discoverable, authenticated tools — without changing the original code.
 
-**Memory is what separates a demo from a product.** Without memory, every conversation starts from zero. AgentCore Memory gives your agent the ability to recall facts, summarize past interactions, and build on previous context — turning a stateless prototype into something customers actually want to use.
+**Security is a configuration change, not a rewrite.** Adding Cognito JWT authentication to both Runtime and Gateway required a few fields in `agentcore.json` and one helper function in agent code. The same pattern works with any OAuth 2.0 compliant identity provider.
 
-**AgentCore Gateway turns existing APIs into agent tools.** Organizations already have valuable business logic in Lambda functions, REST APIs, and internal services. Gateway lets you MCPify them — exposing them as discoverable, authenticated MCP tools — without changing a single line of the original code. The portfolio risk check Lambda is just one example of six supported target types.
+**Governance belongs outside the agent.** AgentCore Policy enforces business rules at the Gateway boundary using Cedar policies — deterministically, outside agent code. The agent can't bypass them, and every decision is logged for audit.
 
-**Security is a configuration change, not a rewrite.** Adding Cognito JWT authentication to both the runtime and the gateway required few code changes to the agent itself — just a few fields in `agentcore.json`, token propagation from Runtime to Gateway and authorization configuration on your MCP Client. The same pattern works with any OAuth 2.0 compliant identity provider.
+**Explainability is built from traces.** By combining agent reasoning traces with Cedar policy decision logs, you get a complete per-transaction audit record — satisfying regulatory requirements without additional code.
 
-**Governance belongs outside the agent.** AgentCore Policy enforces business rules at the Gateway boundary using Cedar policies — deterministically, outside agent code. The agent doesn't need to know about spending limits or access controls. You can add, update, or remove policies without redeploying your agent, and every decision is logged for audit.
+**Observability and evaluation come for free.** Every invocation is automatically instrumented with OpenTelemetry. Adding continuous quality evaluation was two commands. The hard part of production monitoring is already done.
 
-**Observability and evaluation come for free.** Every invocation is automatically instrumented with OpenTelemetry — you don't have to opt in, but you can opt out. Adding continuous quality evaluation on top was two commands. The hard part of production monitoring is already done for you.
-
-**VPC isolation is a configuration change.** Moving from public to VPC mode required changing one field in `agentcore.json` and providing subnet/security group IDs. For financial services workloads where regulatory compliance mandates private network connectivity, this is a critical capability that AgentCore makes trivial.
-
-**Cost optimization is ongoing, not one-time.** Right-sizing session timeouts, evaluation sampling rates, and monitoring token usage are essential for production financial services workloads. AgentCore's CloudWatch integration gives you the metrics to make data-driven decisions about cost vs. quality tradeoffs.
+**VPC isolation is a configuration change.** Moving from public to VPC mode required two fields in `agentcore.json`. For financial services workloads where regulatory compliance mandates private network connectivity, AgentCore makes this trivial.
 
 ## Clean Up
 
@@ -51,7 +56,7 @@ agentcore remove all
 agentcore deploy
 :::
 
-This removes the AgentCore Runtime, Memory, Gateway, Identity, and Evaluation resources.
+This removes the AgentCore Runtime, Gateway, Policy, and Evaluation resources.
 
 ### Prerequisites CloudFormation stack
 
@@ -59,7 +64,7 @@ This removes the AgentCore Runtime, Memory, Gateway, Identity, and Evaluation re
 aws cloudformation delete-stack --stack-name agentcore-workshop-prereqs
 :::
 
-This removes the Cognito User Pool, VPC resources, the portfolio risk check and trade execution Lambda functions, IAM roles, and all SSM parameters.
+This removes the Cognito User Pool, VPC resources, Lambda functions, IAM roles, and SSM parameters.
 
 Verify the stack deletion is complete:
 
@@ -69,10 +74,9 @@ aws cloudformation wait stack-delete-complete --stack-name agentcore-workshop-pr
 
 ## What's Next?
 
-- Browse the [AgentCore Samples repository](https://github.com/awslabs/agentcore-samples) for ready-to-deploy examples covering different frameworks, use cases, and AgentCore features
-- Explore the [AgentCore CLI documentation](https://github.com/aws/agentcore-cli) for advanced features like VPC networking, container deployments, and policy engines
-
-- Explore the [AgentCore documentation](https://docs.aws.amazon.com/bedrock-agentcore/) to understand more about AgentCore and its services
+- Browse the [AgentCore Samples repository](https://github.com/awslabs/agentcore-samples) for ready-to-deploy examples
+- Explore the [AgentCore CLI documentation](https://github.com/aws/agentcore-cli) for advanced features
+- Explore the [AgentCore documentation](https://docs.aws.amazon.com/bedrock-agentcore/) for deeper service understanding
 
 ## Thank You!
 
