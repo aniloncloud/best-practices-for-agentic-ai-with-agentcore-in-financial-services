@@ -36,7 +36,7 @@ Lab 1B: Observability            "We can prove what it did, when, and why" ─�
   │
 Lab 2: Gateway                   "Tools are centralized, discoverable, and auditable"
   │
-Lab 3: Security                  "Only authenticated users can call it" ────── Question 1 ✓
+Lab 3: Security                  "OAuth 2.0 — only authenticated callers" ──── Question 1 ✓
   │
 Lab 4: Governance                "Cedar policies block oversized trades" ────── Question 2 ✓
   │                              "Every decision is logged for audit" ───────── Question 3 ✓

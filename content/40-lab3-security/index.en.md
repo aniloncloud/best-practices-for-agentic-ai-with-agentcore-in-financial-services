@@ -7,25 +7,42 @@ weight: 42
 
 ## Overview
 
-Authentication answers "who is calling?" — and you need it on both endpoints. Runtime and Gateway are independent HTTPS endpoints: securing only one leaves the other open. In this lab you apply the same Cognito JWT authorizer to both and propagate the token from Runtime to Gateway automatically.
+Authentication answers "who is calling?" — and you need it on both endpoints. Runtime and Gateway are independent HTTPS endpoints: securing only one leaves the other open. In this lab you apply a Cognito JWT authorizer to both, demonstrate two OAuth 2.0 flows, and propagate the token from Runtime to Gateway automatically.
 
 ### What You're Building
 
 :::code{language=bash showCopyAction=false}
-Client (+ JWT token)  ← THIS LAB adds auth
-    ↓
-┌──────────────────────────────────────────────────┐
-│ Cognito validates token (signature + expiry)     │
-└──────────────────────────────────────────────────┘
-    ↓
-AgentCore Runtime (JWT required)  ← secured
-    │
-    │ forwards token
-    ▼
-AgentCore Gateway (JWT required)  ← secured
-    ├── PortfolioRiskCheck → Lambda
-    └── ExecuteTrade → Lambda
+┌─────────────────────────────────────────────────────────────────┐
+│  OAuth 2.0 Flows  ← THIS LAB                                   │
+│                                                                 │
+│  User (password grant)         Service (client_credentials)     │
+│       │                               │                         │
+│       ▼                               ▼                         │
+│  Cognito User Pool ──────────── Cognito User Pool               │
+│       │                               │                         │
+│       └──── JWT access token ─────────┘                         │
+└─────────────────────────────────────────────────────────────────┘
+                         │
+                         ▼
+         AgentCore Runtime (JWT required)  ← secured
+                         │
+                         │ forwards token
+                         ▼
+         AgentCore Gateway (JWT required)  ← secured
+                         ├── PortfolioRiskCheck → Lambda
+                         └── ExecuteTrade → Lambda
 :::
+
+### OAuth 2.0 Grant Types
+
+AgentCore Runtime validates standard JWT tokens — it doesn't care which OAuth flow produced them. Your Cognito setup supports two:
+
+| Grant Type | Use Case | Who Has It |
+|-----------|----------|------------|
+| **Resource Owner Password** (`USER_PASSWORD_AUTH`) | Human users — interactive login with username/password | Test user: `workshopuser@example.com` |
+| **Client Credentials** (`client_credentials`) | Machine-to-machine — CI pipelines, other agents, batch jobs | M2M client: pre-provisioned |
+
+Both produce a JWT access token. Both work with the same `authorizerConfiguration`. The difference is **who** the token represents — a human or a service.
 
 ## Step 1: Retrieve Cognito Configuration
 
@@ -165,6 +182,46 @@ Write-Host "Token obtained successfully"
 
 :::alert{header="Token expiry" type="info"}
 Tokens are valid for 60 minutes. If you see an auth error later, re-run this block.
+:::
+
+### Machine-to-Machine Token (Client Credentials)
+
+For service-to-service calls (CI pipelines, batch jobs, other agents), use the `client_credentials` grant — no username/password required:
+
+::::tabs{variant="container" groupId="os"}
+:::tab{label="macOS/Linux"}
+```bash
+COGNITO_DOMAIN=$(aws ssm get-parameter \
+  --name /app/portfolioadvisor/agentcore/cognito_domain \
+  --query 'Parameter.Value' --output text)
+
+M2M_TOKEN=$(curl -s -X POST "$COGNITO_DOMAIN/oauth2/token" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "grant_type=client_credentials&client_id=$COGNITO_CLIENT_ID&scope=agentcore/invoke" \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+
+echo "M2M token obtained successfully"
+```
+:::
+:::tab{label="Windows"}
+```powershell
+$COGNITO_DOMAIN = aws ssm get-parameter `
+  --name /app/portfolioadvisor/agentcore/cognito_domain `
+  --query 'Parameter.Value' --output text
+
+$response = Invoke-RestMethod -Uri "$COGNITO_DOMAIN/oauth2/token" `
+  -Method POST -ContentType "application/x-www-form-urlencoded" `
+  -Body "grant_type=client_credentials&client_id=$COGNITO_CLIENT_ID&scope=agentcore/invoke"
+
+$M2M_TOKEN = $response.access_token
+Write-Host "M2M token obtained successfully"
+
+```
+:::
+::::
+
+:::alert{header="When to use which" type="info"}
+Use the **user token** (`$TOKEN`) when you need per-user identity for policies and audit. Use the **M2M token** (`$M2M_TOKEN`) for automated pipelines that don't have a human user context. Both are accepted by the same authorizer — the Runtime doesn't distinguish between them.
 :::
 
 ## Step 4: Test Authenticated Access
