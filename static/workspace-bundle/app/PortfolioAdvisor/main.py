@@ -1,11 +1,12 @@
 import json
 import logging
-import uuid
 
 from strands import Agent, tool
-from strands.models.bedrock import BedrockModel
+from bedrock_agentcore.runtime import BedrockAgentCoreApp
+from model.load import load_model
 
-logger = logging.getLogger(__name__)
+app = BedrockAgentCoreApp()
+log = app.logger
 
 STOCKS = {
     "AAPL": {"name": "Apple Inc.", "price": 178.52, "change": 2.35, "pe_ratio": 28.4, "market_cap": "2.8T", "sector": "Technology", "recommendation": "Buy", "risk_level": "Medium"},
@@ -69,22 +70,10 @@ def get_compliance_rules(category: str) -> str:
 
 
 # --- Gateway MCP Client (uncomment in Lab 2) ---
-# from mcp_client.client import gateway_mcp_client
-# mcp_tools = [gateway_mcp_client]
-
-mcp_tools = []
+# from mcp_client.client import get_gateway_mcp_client
 
 
-def handler(event, context):
-    session_id = event.get("sessionId", str(uuid.uuid4()))
-    prompt = event.get("prompt", "")
-
-    model = BedrockModel(
-        model_id="us.anthropic.claude-sonnet-4-20250514-v1:0",
-        region_name="us-west-2",
-    )
-
-    system_prompt = """You are a portfolio advisor for a capital markets firm. You help clients with:
+SYSTEM_PROMPT = """You are a portfolio advisor for a capital markets firm. You help clients with:
 - Stock analysis and market insights
 - Compliance rules and requirements
 - Portfolio risk assessment
@@ -94,11 +83,26 @@ Always provide clear, data-driven insights. Flag compliance concerns proactively
 When asked about portfolio risk, use the check_portfolio_risk tool via the Gateway.
 When asked to execute trades, use the execute_trade tool via the Gateway."""
 
-    agent = Agent(
-        model=model,
-        system_prompt=system_prompt,
-        tools=[get_stock_analysis, get_compliance_rules] + mcp_tools,
+
+def get_or_create_agent(session_id=None, user_id=None, auth_header=""):
+    tools = [get_stock_analysis, get_compliance_rules]
+    return Agent(
+        model=load_model(),
+        system_prompt=SYSTEM_PROMPT,
+        tools=tools,
     )
 
-    response = agent(prompt)
-    return {"response": str(response), "sessionId": session_id}
+
+@app.entrypoint
+async def invoke(payload, context):
+    log.info("Invoking Agent...")
+    session_id = context.session_id
+    agent = get_or_create_agent(session_id)
+    stream = agent.stream_async(payload.get("prompt"))
+    async for event in stream:
+        if "data" in event and isinstance(event["data"], str):
+            yield event["data"]
+
+
+if __name__ == "__main__":
+    app.run()

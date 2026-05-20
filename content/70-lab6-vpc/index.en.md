@@ -110,21 +110,21 @@ You should see four resource identifiers. Keep them — you'll paste them into `
 Open `agentcore/agentcore.json`. In the `runtimes` array, find the `"PortfolioAdvisor"` entry and make two changes:
 
 1. Change `"networkMode": "PUBLIC"` to `"networkMode": "VPC"` (or add the field if it isn't present — it defaults to `PUBLIC`)
-2. Add a `vpcConfig` block with your subnet IDs and security group ID
+2. Add a `networkConfig` block with your subnet IDs and security group ID
 
 The updated runtime entry should include:
 
 :::code{language=json showCopyAction=false}
 "networkMode": "VPC",
-"vpcConfig": {
-  "subnetIds": ["<PRIVATE_SUBNET_1>", "<PRIVATE_SUBNET_2>"],
-  "securityGroupIds": ["<SECURITY_GROUP_ID>"]
+"networkConfig": {
+  "subnets": ["<PRIVATE_SUBNET_1>", "<PRIVATE_SUBNET_2>"],
+  "securityGroups": ["<SECURITY_GROUP_ID>"]
 }
 :::
 
 Replace `<PRIVATE_SUBNET_1>`, `<PRIVATE_SUBNET_2>`, and `<SECURITY_GROUP_ID>` with the actual values printed in Step 1. Leave all other fields — authorizer, gateway, protocol — unchanged.
 
-:::alert{header="CLI Exception: networkMode and vpcConfig" type="warning"}
+:::alert{header="CLI Exception: networkMode and networkConfig" type="warning"}
 The `agentcore` CLI does not expose a `--network-mode` flag. This is one of the few cases where a direct `agentcore.json` edit is required — the same pattern used for `authorizerConfiguration` in Lab 3. All other configuration uses the CLI; only these two fields require a manual JSON edit.
 :::
 
@@ -231,7 +231,7 @@ If VPC connectivity issues can't be resolved in the workshop timeframe, revert w
 
 1. Open `agentcore/agentcore.json`
 2. Change `"networkMode": "VPC"` back to `"networkMode": "PUBLIC"`
-3. The `vpcConfig` block can stay — it is ignored in `PUBLIC` mode
+3. The `networkConfig` block can stay — it is ignored in `PUBLIC` mode
 4. Redeploy:
 
 :::code{language=bash}
@@ -263,7 +263,7 @@ AWS service traffic (Bedrock, Gateway, CloudWatch, S3)
 Two fields in `agentcore.json` enabled full VPC isolation:
 
 1. `"networkMode": "VPC"` — tells AgentCore to provision ENIs in your subnets
-2. `"vpcConfig"` — specifies which subnets and security group to use
+2. `"networkConfig"` — specifies which subnets and security group to use
 
 AgentCore handled ENI provisioning, DNS resolution updates, and VPC endpoint routing automatically. Your agent code, tools, Gateway integration, JWT auth, and Cedar policies all work identically — the only change is the network path.
 

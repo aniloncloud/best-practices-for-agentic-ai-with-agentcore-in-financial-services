@@ -5,8 +5,8 @@ weight: 35
 
 **⏱️ Estimated time: ~20 minutes**
 
-:::alert{header="Optional Lab" type="info"}
-This lab is optional. It can be done anytime after Lab 2 (Gateway). The core path continues directly from Lab 2 to Lab 3 (Security). No subsequent labs depend on the MarketData target added here.
+:::alert{header="Optional Lab — Requires Pre-provisioned Infrastructure" type="warning"}
+This lab is optional and requires a Market Data MCP server to be pre-provisioned in your workshop account. If the SSM parameter `/app/portfolioadvisor/agentcore/market_data_mcp_endpoint` does not exist, this lab cannot be completed. The core path continues directly from Lab 2 to Lab 3 (Security). No subsequent labs depend on the MarketData target added here.
 :::
 
 ## Overview

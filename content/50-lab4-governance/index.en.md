@@ -207,9 +207,89 @@ agentcore add policy `
 
 ## Step 3: Deploy
 
+:::alert{header="Known Issue: Policy Engine Attachment" type="warning"}
+The CDK deployment creates the policy engine and policies, but attaching the engine to the gateway may fail due to a circular dependency in IAM role policy creation. If `agentcore deploy` fails with a permissions error, follow the workaround steps below.
+:::
+
+First, temporarily remove the `--attach-to-gateways` from the policy engine configuration if the deploy fails. You can do this by editing `agentcore/agentcore.json` and removing the `policyEngineConfiguration` field from the gateway block, then redeploying. The policy engine and its policies will still be created — only the attachment step is deferred.
+
 :::code{language=bash}
 agentcore deploy -y -v
 :::
+
+### Workaround: Manual Policy Engine Attachment
+
+If the deployment succeeded but the policy engine is not attached to the gateway, run these commands to attach it manually:
+
+::::tabs{variant="container" groupId="os"}
+:::tab{label="macOS/Linux"}
+```bash
+# 1. Get the gateway role name
+GATEWAY_ROLE_NAME=$(aws cloudformation describe-stack-resources \
+  --stack-name AgentCore-PortfolioAdvisor-default \
+  --query "StackResources[?ResourceType=='AWS::IAM::Role' && contains(LogicalResourceId, 'McpGateway')].PhysicalResourceId | [0]" \
+  --output text)
+
+# 2. Grant the gateway role permission to call the policy engine
+aws iam put-role-policy \
+  --role-name $GATEWAY_ROLE_NAME \
+  --policy-name PolicyEngineAccess \
+  --policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["bedrock-agentcore:CheckAuthorizePermissions","bedrock-agentcore:IsAuthorized","bedrock-agentcore:IsAuthorizedWithToken","bedrock-agentcore:GetPolicyEngine"],"Resource":"*"}]}'
+
+# 3. Get the policy engine ARN and gateway ID
+PE_ARN=$(aws cloudformation describe-stacks \
+  --stack-name AgentCore-PortfolioAdvisor-default \
+  --query "Stacks[0].Outputs[?contains(OutputKey, 'PolicyEngine') && contains(OutputKey, 'Arn')].OutputValue | [0]" \
+  --output text)
+
+GATEWAY_ID=$(aws cloudformation describe-stacks \
+  --stack-name AgentCore-PortfolioAdvisor-default \
+  --query "Stacks[0].Outputs[?contains(OutputKey, 'GatewayMyGatewaySecureId')].OutputValue | [0]" \
+  --output text)
+
+# 4. Attach the policy engine to the gateway
+aws bedrock-agentcore-control update-gateway \
+  --gateway-identifier $GATEWAY_ID \
+  --policy-engine-configuration "{\"arn\":\"${PE_ARN}\",\"mode\":\"ENFORCE\"}"
+
+echo "Policy engine attached to gateway: $GATEWAY_ID"
+```
+:::
+:::tab{label="Windows"}
+```powershell
+# 1. Get the gateway role name
+$GATEWAY_ROLE_NAME = aws cloudformation describe-stack-resources `
+  --stack-name AgentCore-PortfolioAdvisor-default `
+  --query "StackResources[?ResourceType=='AWS::IAM::Role' && contains(LogicalResourceId, 'McpGateway')].PhysicalResourceId | [0]" `
+  --output text
+
+# 2. Grant the gateway role permission to call the policy engine
+aws iam put-role-policy `
+  --role-name $GATEWAY_ROLE_NAME `
+  --policy-name PolicyEngineAccess `
+  --policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["bedrock-agentcore:CheckAuthorizePermissions","bedrock-agentcore:IsAuthorized","bedrock-agentcore:IsAuthorizedWithToken","bedrock-agentcore:GetPolicyEngine"],"Resource":"*"}]}'
+
+# 3. Get the policy engine ARN and gateway ID
+$PE_ARN = aws cloudformation describe-stacks `
+  --stack-name AgentCore-PortfolioAdvisor-default `
+  --query "Stacks[0].Outputs[?contains(OutputKey, 'PolicyEngine') && contains(OutputKey, 'Arn')].OutputValue | [0]" `
+  --output text
+
+$GATEWAY_ID = aws cloudformation describe-stacks `
+  --stack-name AgentCore-PortfolioAdvisor-default `
+  --query "Stacks[0].Outputs[?contains(OutputKey, 'GatewayMyGatewaySecureId')].OutputValue | [0]" `
+  --output text
+
+# 4. Attach the policy engine to the gateway
+aws bedrock-agentcore-control update-gateway `
+  --gateway-identifier $GATEWAY_ID `
+  --policy-engine-configuration "{`"arn`":`"$PE_ARN`",`"mode`":`"ENFORCE`"}"
+
+Write-Host "Policy engine attached to gateway: $GATEWAY_ID"
+
+```
+:::
+::::
 
 ## Step 4: Test Policy Enforcement
 

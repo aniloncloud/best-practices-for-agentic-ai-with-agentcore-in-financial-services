@@ -160,10 +160,10 @@ Token usage is the primary cost driver. Use the AWS CLI to query consumption fro
 ::::tabs{variant="container" groupId="os"}
 :::tab{label="macOS/Linux"}
 ```bash
-# Input tokens for the last hour
+# Invocations for the last hour
 aws cloudwatch get-metric-statistics \
-  --namespace "Bedrock-AgentCore" \
-  --metric-name "InputTokenCount" \
+  --namespace "AWS/Bedrock-AgentCore" \
+  --metric-name "Invocations" \
   --start-time $(date -u -v-1H +"%Y-%m-%dT%H:%M:%S") \
   --end-time $(date -u +"%Y-%m-%dT%H:%M:%S") \
   --period 300 \
@@ -177,8 +177,8 @@ $startTime = (Get-Date).AddHours(-1).ToUniversalTime().ToString("yyyy-MM-ddTHH:m
 $endTime   = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss")
 
 aws cloudwatch get-metric-statistics `
-  --namespace "Bedrock-AgentCore" `
-  --metric-name "InputTokenCount" `
+  --namespace "AWS/Bedrock-AgentCore" `
+  --metric-name "Invocations" `
   --start-time $startTime `
   --end-time $endTime `
   --period 300 `
@@ -214,10 +214,10 @@ aws cloudwatch put-dashboard \
         "type": "metric",
         "x": 0, "y": 0, "width": 12, "height": 6,
         "properties": {
-          "title": "Token Usage (Input vs Output)",
+          "title": "Invocations and Duration",
           "metrics": [
-            ["Bedrock-AgentCore", "InputTokenCount",  {"stat": "Sum", "period": 3600}],
-            ["Bedrock-AgentCore", "OutputTokenCount", {"stat": "Sum", "period": 3600}]
+            ["AWS/Bedrock-AgentCore", "Invocations",  {"stat": "Sum", "period": 3600}],
+            ["AWS/Bedrock-AgentCore", "Duration", {"stat": "Average", "period": 3600}]
           ],
           "view": "timeSeries",
           "region": "us-west-2",
@@ -230,7 +230,7 @@ aws cloudwatch put-dashboard \
         "properties": {
           "title": "Invocation Count",
           "metrics": [
-            ["Bedrock-AgentCore", "InvocationCount", {"stat": "Sum", "period": 3600}]
+            ["AWS/Bedrock-AgentCore", "Invocations", {"stat": "Sum", "period": 3600}]
           ],
           "view": "timeSeries",
           "region": "us-west-2",
@@ -241,10 +241,10 @@ aws cloudwatch put-dashboard \
         "type": "metric",
         "x": 0, "y": 6, "width": 12, "height": 6,
         "properties": {
-          "title": "Average Tokens per Invocation",
+          "title": "Errors and Spend",
           "metrics": [
-            ["Bedrock-AgentCore", "InputTokenCount",  {"stat": "Average", "period": 3600}],
-            ["Bedrock-AgentCore", "OutputTokenCount", {"stat": "Average", "period": 3600}]
+            ["AWS/Bedrock-AgentCore", "Errors",  {"stat": "Sum", "period": 3600}],
+            ["AWS/Bedrock-AgentCore", "SpendAmount", {"stat": "Sum", "period": 3600}]
           ],
           "view": "timeSeries",
           "region": "us-west-2",
@@ -264,10 +264,10 @@ $dashboardBody = @'
       "type": "metric",
       "x": 0, "y": 0, "width": 12, "height": 6,
       "properties": {
-        "title": "Token Usage (Input vs Output)",
+        "title": "Invocations and Duration",
         "metrics": [
-          ["Bedrock-AgentCore", "InputTokenCount",  {"stat": "Sum", "period": 3600}],
-          ["Bedrock-AgentCore", "OutputTokenCount", {"stat": "Sum", "period": 3600}]
+          ["AWS/Bedrock-AgentCore", "Invocations",  {"stat": "Sum", "period": 3600}],
+          ["AWS/Bedrock-AgentCore", "Duration", {"stat": "Average", "period": 3600}]
         ],
         "view": "timeSeries",
         "region": "us-west-2",
@@ -280,7 +280,7 @@ $dashboardBody = @'
       "properties": {
         "title": "Invocation Count",
         "metrics": [
-          ["Bedrock-AgentCore", "InvocationCount", {"stat": "Sum", "period": 3600}]
+          ["AWS/Bedrock-AgentCore", "Invocations", {"stat": "Sum", "period": 3600}]
         ],
         "view": "timeSeries",
         "region": "us-west-2",
@@ -291,10 +291,10 @@ $dashboardBody = @'
       "type": "metric",
       "x": 0, "y": 6, "width": 12, "height": 6,
       "properties": {
-        "title": "Average Tokens per Invocation",
+        "title": "Errors and Spend",
         "metrics": [
-          ["Bedrock-AgentCore", "InputTokenCount",  {"stat": "Average", "period": 3600}],
-          ["Bedrock-AgentCore", "OutputTokenCount", {"stat": "Average", "period": 3600}]
+          ["AWS/Bedrock-AgentCore", "Errors",  {"stat": "Sum", "period": 3600}],
+          ["AWS/Bedrock-AgentCore", "SpendAmount", {"stat": "Sum", "period": 3600}]
         ],
         "view": "timeSeries",
         "region": "us-west-2",

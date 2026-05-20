@@ -40,7 +40,7 @@ agentcore validate
 
 You should see:
 :::code{language=bash showCopyAction=false}
-Validation passed
+Valid
 :::
 
 Review the runtime configuration:
@@ -49,7 +49,7 @@ Review the runtime configuration:
 cat agentcore/agentcore.json
 :::
 
-You'll see a single runtime named `PortfolioAdvisor` pointing to your agent code. The model is Claude Sonnet, and the code directory is `../app/PortfolioAdvisor`.
+You'll see a single runtime named `PortfolioAdvisor` pointing to your agent code. The `codeLocation` is `app/PortfolioAdvisor/` and the `entrypoint` is `main.py`.
 
 ::::::expand{header="Understanding the Project Structure"}
 
@@ -59,12 +59,15 @@ Your pre-provisioned workspace at `~/PortfolioAdvisor/` has a specific layout th
 PortfolioAdvisor/
 ├── agentcore/
 │   ├── agentcore.json              # Main configuration (runtimes, gateways, policies, evals)
+│   ├── aws-targets.json            # Deployment targets (account, region)
 │   ├── .cli/
 │   │   └── deployed-state.json     # Tracks deployed resource ARNs (auto-managed)
 │   └── cdk/                        # CDK infrastructure (auto-generated, don't edit)
 ├── app/
 │   └── PortfolioAdvisor/
-│       ├── main.py                 # Agent entry point (tools, system prompt, handler)
+│       ├── main.py                 # Agent entry point (@app.entrypoint async generator)
+│       ├── model/
+│       │   └── load.py             # Model configuration (Claude Sonnet)
 │       ├── mcp_client/
 │       │   └── client.py           # Gateway MCP client (commented out until Lab 2)
 │       ├── tool/
@@ -77,7 +80,7 @@ PortfolioAdvisor/
 **Key files:**
 
 - **`agentcore/agentcore.json`** — The single source of truth for what gets deployed. Every lab modifies this file (directly or via CLI commands). It accumulates: runtime config → gateway → auth → policies → evaluations → VPC config.
-- **`app/PortfolioAdvisor/main.py`** — The agent itself. Contains the system prompt, local tools, and the `handler()` entrypoint. You'll make exactly TWO code changes across all 6 core labs: uncommenting the MCP client (Lab 2) and adding `extract_user_id` (Lab 3).
+- **`app/PortfolioAdvisor/main.py`** — The agent itself. Contains the system prompt, local tools, and the `@app.entrypoint` async generator. You'll make exactly TWO code changes across all 6 core labs: uncommenting the MCP client (Lab 2) and adding `extract_user_id` (Lab 3).
 - **`app/PortfolioAdvisor/tool/*.json`** — JSON Schema definitions for Gateway tools. These schemas are how the LLM decides WHEN to use each tool and WHAT parameters to pass.
 - **`agentcore/.cli/deployed-state.json`** — Starts empty (`{"targets": {}}`). After each `agentcore deploy`, the CLI records deployed resource ARNs here. Don't edit it manually.
 

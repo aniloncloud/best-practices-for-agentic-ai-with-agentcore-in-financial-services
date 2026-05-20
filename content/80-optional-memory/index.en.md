@@ -215,6 +215,60 @@ You should see the memory resource added to your existing deployment:
 ✓ Deployed to 'default'
 :::
 
+### Grant Memory Retrieval Permissions
+
+The CDK stack grants write access to memory but you must manually add retrieval permissions to the runtime role:
+
+::::tabs{variant="container" groupId="os"}
+:::tab{label="macOS/Linux"}
+```bash
+RUNTIME_ROLE_NAME=$(aws cloudformation describe-stack-resources \
+  --stack-name AgentCore-PortfolioAdvisor-default \
+  --query "StackResources[?ResourceType=='AWS::IAM::Role' && contains(LogicalResourceId, 'ApplicationAgentPortfolio')].PhysicalResourceId | [0]" \
+  --output text)
+
+MEMORY_ARN=$(aws cloudformation describe-stacks \
+  --stack-name AgentCore-PortfolioAdvisor-default \
+  --query "Stacks[0].Outputs[?contains(OutputKey, 'MemorySharedMemoryArn')].OutputValue | [0]" \
+  --output text)
+
+aws iam put-role-policy \
+  --role-name $RUNTIME_ROLE_NAME \
+  --policy-name MemoryAccess \
+  --policy-document "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":[\"bedrock-agentcore:RetrieveMemoryRecords\",\"bedrock-agentcore:GetMemory\",\"bedrock-agentcore:ListMemoryRecords\",\"bedrock-agentcore:CreateMemoryEvent\",\"bedrock-agentcore:ListMemoryEvents\"],\"Resource\":\"${MEMORY_ARN}\"}]}"
+
+echo "Added MemoryAccess policy to role: $RUNTIME_ROLE_NAME"
+```
+:::
+:::tab{label="Windows"}
+```powershell
+$RUNTIME_ROLE_NAME = aws cloudformation describe-stack-resources `
+  --stack-name AgentCore-PortfolioAdvisor-default `
+  --query "StackResources[?ResourceType=='AWS::IAM::Role' && contains(LogicalResourceId, 'ApplicationAgentPortfolio')].PhysicalResourceId | [0]" `
+  --output text
+
+$MEMORY_ARN = aws cloudformation describe-stacks `
+  --stack-name AgentCore-PortfolioAdvisor-default `
+  --query "Stacks[0].Outputs[?contains(OutputKey, 'MemorySharedMemoryArn')].OutputValue | [0]" `
+  --output text
+
+$policyDoc = '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["bedrock-agentcore:RetrieveMemoryRecords","bedrock-agentcore:GetMemory","bedrock-agentcore:ListMemoryRecords","bedrock-agentcore:CreateMemoryEvent","bedrock-agentcore:ListMemoryEvents"],"Resource":"' + $MEMORY_ARN + '"}]}'
+
+aws iam put-role-policy `
+  --role-name $RUNTIME_ROLE_NAME `
+  --policy-name MemoryAccess `
+  --policy-document $policyDoc
+
+Write-Host "Added MemoryAccess policy to role: $RUNTIME_ROLE_NAME"
+
+```
+:::
+::::
+
+:::alert{header="Why is this step needed?" type="info"}
+The AgentCore CDK constructs grant event write permissions (`CreateMemoryEvent`) to the runtime role but do not currently grant retrieval permissions (`RetrieveMemoryRecords`). This manual IAM step is required until the CDK fix ships.
+:::
+
 ## Step 5: Test Memory Recall Across Sessions
 
 Get a token, then teach the agent about a client in **Session A**:
@@ -224,7 +278,7 @@ Get a token, then teach the agent about a client in **Session A**:
 ```bash
 TOKEN=$(aws cognito-idp initiate-auth \
   --auth-flow USER_PASSWORD_AUTH \
-  --client-id $(aws ssm get-parameter --name /app/portfolioadvisor/agentcore/m2m_client_id --query 'Parameter.Value' --output text) \
+  --client-id $(aws ssm get-parameter --name /app/portfolioadvisor/agentcore/web_client_id --query 'Parameter.Value' --output text) \
   --auth-parameters USERNAME=workshopuser@example.com,PASSWORD=WorkshopPass1! \
   --query 'AuthenticationResult.AccessToken' --output text)
 
@@ -240,7 +294,7 @@ agentcore invoke "My name is Alex Chen. I prefer conservative dividend stocks. M
 ```powershell
 $TOKEN = aws cognito-idp initiate-auth `
   --auth-flow USER_PASSWORD_AUTH `
-  --client-id (aws ssm get-parameter --name /app/portfolioadvisor/agentcore/m2m_client_id --query 'Parameter.Value' --output text) `
+  --client-id (aws ssm get-parameter --name /app/portfolioadvisor/agentcore/web_client_id --query 'Parameter.Value' --output text) `
   --auth-parameters USERNAME=workshopuser@example.com,PASSWORD=WorkshopPass1! `
   --query 'AuthenticationResult.AccessToken' --output text
 

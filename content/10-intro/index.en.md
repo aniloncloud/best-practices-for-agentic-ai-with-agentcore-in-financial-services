@@ -74,12 +74,12 @@ This workshop runs exclusively in **us-west-2**. If your region is different, ru
 Open `app/PortfolioAdvisor/main.py` in VS Code. Notice:
 - Two local tools: `get_stock_analysis()` and `get_compliance_rules()`
 - An MCP client stub (commented out — you'll enable this in Lab 2)
-- A `handler()` function that creates a Strands Agent and invokes it with the user's prompt
+- An `@app.entrypoint` async generator that creates a Strands Agent and streams responses
 - Simulated financial data (stocks, compliance rules)
 
 ### 7. Review the AgentCore Configuration
 
-Open `agentcore/agentcore.json`. It contains a single runtime definition with the agent's name, model, and code directory. No gateway, auth, or VPC config yet — you'll add those in subsequent labs.
+Open `agentcore/agentcore.json`. It contains a single runtime definition with the agent's name, entrypoint, and code location. No gateway, auth, or VPC config yet — you'll add those in subsequent labs.
 
 ## Workshop Structure
 

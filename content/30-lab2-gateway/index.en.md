@@ -51,14 +51,14 @@ agentcore invoke ──▶ AgentCore Runtime (PortfolioAdvisor)
 ```bash
 agentcore add gateway \
   --name my-gateway \
-  --runtime PortfolioAdvisor
+  --runtimes PortfolioAdvisor
 ```
 :::
 :::tab{label="Windows"}
 ```powershell
 agentcore add gateway `
   --name my-gateway `
-  --runtime PortfolioAdvisor
+  --runtimes PortfolioAdvisor
 
 ```
 :::
@@ -141,22 +141,32 @@ agentcore add gateway-target `
 
 ## Step 4: Enable the MCP Client in Your Agent
 
-Open `app/PortfolioAdvisor/main.py` in VS Code. Find the commented-out MCP client section and uncomment it:
+Open `app/PortfolioAdvisor/main.py` in your editor. Find the commented-out MCP client section and uncomment it:
 
 **Change this:**
 ```python
 # --- Gateway MCP Client (uncomment in Lab 2) ---
-# from mcp_client.client import gateway_mcp_client
-# mcp_tools = [gateway_mcp_client]
-
-mcp_tools = []
+# from mcp_client.client import get_gateway_mcp_client
 ```
 
 **To this:**
 ```python
 # --- Gateway MCP Client ---
-from mcp_client.client import gateway_mcp_client
-mcp_tools = [gateway_mcp_client]
+from mcp_client.client import get_gateway_mcp_client
+```
+
+Then update `get_or_create_agent` to include gateway tools:
+
+```python
+def get_or_create_agent(session_id=None, user_id=None, auth_header=""):
+    gateway_client = get_gateway_mcp_client(auth_header)
+    mcp_tools = [gateway_client] if gateway_client else []
+    tools = [get_stock_analysis, get_compliance_rules] + mcp_tools
+    return Agent(
+        model=load_model(),
+        system_prompt=SYSTEM_PROMPT,
+        tools=tools,
+    )
 ```
 
 Save the file.
