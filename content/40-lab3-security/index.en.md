@@ -132,8 +132,10 @@ def extract_user_id(context) -> str:
 async def invoke(payload, context):
     log.info("Invoking Agent...")
     session_id = context.session_id
+    headers = context.request_headers or {}
+    auth_header = headers.get("Authorization") or headers.get("authorization", "")
     user_id = extract_user_id(context)
-    agent = get_or_create_agent(session_id, user_id)
+    agent = get_or_create_agent(session_id, user_id, auth_header)
     stream = agent.stream_async(payload.get("prompt"))
     async for event in stream:
         if "data" in event and isinstance(event["data"], str):
@@ -195,9 +197,19 @@ COGNITO_DOMAIN=$(aws ssm get-parameter \
   --name /app/portfolioadvisor/agentcore/cognito_domain \
   --query 'Parameter.Value' --output text)
 
+COGNITO_SCOPE=$(aws ssm get-parameter \
+  --name /app/portfolioadvisor/agentcore/cognito_auth_scope \
+  --query 'Parameter.Value' --output text)
+
+# Retrieve the M2M client secret from Cognito
+CLIENT_SECRET=$(aws cognito-idp describe-user-pool-client \
+  --user-pool-id $(aws ssm get-parameter --name /app/portfolioadvisor/agentcore/pool_id --query 'Parameter.Value' --output text) \
+  --client-id $COGNITO_CLIENT_ID \
+  --query 'UserPoolClient.ClientSecret' --output text)
+
 M2M_TOKEN=$(curl -s -X POST "$COGNITO_DOMAIN/oauth2/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "grant_type=client_credentials&client_id=$COGNITO_CLIENT_ID&scope=agentcore/invoke" \
+  -d "grant_type=client_credentials&client_id=$COGNITO_CLIENT_ID&client_secret=$CLIENT_SECRET&scope=$COGNITO_SCOPE" \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
 echo "M2M token obtained successfully"
@@ -209,9 +221,20 @@ $COGNITO_DOMAIN = aws ssm get-parameter `
   --name /app/portfolioadvisor/agentcore/cognito_domain `
   --query 'Parameter.Value' --output text
 
+$COGNITO_SCOPE = aws ssm get-parameter `
+  --name /app/portfolioadvisor/agentcore/cognito_auth_scope `
+  --query 'Parameter.Value' --output text
+
+# Retrieve the M2M client secret from Cognito
+$POOL_ID = aws ssm get-parameter --name /app/portfolioadvisor/agentcore/pool_id --query 'Parameter.Value' --output text
+$CLIENT_SECRET = aws cognito-idp describe-user-pool-client `
+  --user-pool-id $POOL_ID `
+  --client-id $COGNITO_CLIENT_ID `
+  --query 'UserPoolClient.ClientSecret' --output text
+
 $response = Invoke-RestMethod -Uri "$COGNITO_DOMAIN/oauth2/token" `
   -Method POST -ContentType "application/x-www-form-urlencoded" `
-  -Body "grant_type=client_credentials&client_id=$COGNITO_CLIENT_ID&scope=agentcore/invoke"
+  -Body "grant_type=client_credentials&client_id=$COGNITO_CLIENT_ID&client_secret=$CLIENT_SECRET&scope=$COGNITO_SCOPE"
 
 $M2M_TOKEN = $response.access_token
 Write-Host "M2M token obtained successfully"
@@ -287,7 +310,7 @@ agentcore add gateway --name my-gateway-secure --runtimes PortfolioAdvisor `
 :::
 ::::
 
-Re-add the portfolio risk check target (retrieve its ARN from SSM, then add it):
+Re-add both tool targets to the new gateway:
 
 ::::tabs{variant="container" groupId="os"}
 :::tab{label="macOS/Linux"}
@@ -300,6 +323,16 @@ agentcore add gateway-target \
   --name PortfolioRiskCheck \
   --lambda-arn $PORTFOLIO_RISK_LAMBDA_ARN \
   --tool-schema-file app/PortfolioAdvisor/tool/portfolio_risk_schema.json \
+  --gateway my-gateway-secure
+
+TRADE_LAMBDA_ARN=$(aws ssm get-parameter \
+  --name /app/portfolioadvisor/agentcore/execute_trade_lambda_arn \
+  --query 'Parameter.Value' --output text)
+agentcore add gateway-target \
+  --type lambda-function-arn \
+  --name ExecuteTrade \
+  --lambda-arn $TRADE_LAMBDA_ARN \
+  --tool-schema-file app/PortfolioAdvisor/tool/trade_schema.json \
   --gateway my-gateway-secure
 ```
 :::
@@ -315,6 +348,16 @@ agentcore add gateway-target `
   --tool-schema-file app/PortfolioAdvisor/tool/portfolio_risk_schema.json `
   --gateway my-gateway-secure
 
+$TRADE_LAMBDA_ARN = aws ssm get-parameter `
+  --name /app/portfolioadvisor/agentcore/execute_trade_lambda_arn `
+  --query 'Parameter.Value' --output text
+agentcore add gateway-target `
+  --type lambda-function-arn `
+  --name ExecuteTrade `
+  --lambda-arn $TRADE_LAMBDA_ARN `
+  --tool-schema-file app/PortfolioAdvisor/tool/trade_schema.json `
+  --gateway my-gateway-secure
+
 ```
 :::
 ::::
@@ -327,21 +370,17 @@ from mcp.client.streamable_http import streamablehttp_client
 from strands.tools.mcp.mcp_client import MCPClient
 
 logger = logging.getLogger(__name__)
-EXAMPLE_MCP_ENDPOINT = "https://mcp.exa.ai/mcp"
-
-def get_streamable_http_mcp_client() -> MCPClient:
-    """Returns an MCP Client for Exa AI web search"""
-    return MCPClient(lambda: streamablehttp_client(EXAMPLE_MCP_ENDPOINT))
 
 def get_gateway_mcp_client(auth_header: str = "") -> MCPClient | None:
     """Returns an MCP Client for AgentCore Gateway, forwarding the caller's JWT"""
-    url = os.environ.get("AGENTCORE_GATEWAY_MY_GATEWAY_SECURE_URL")
+    url = os.environ.get("AGENTCORE_GATEWAY_MY_GATEWAY_SECURE_URL") or os.environ.get("AGENTCORE_GATEWAY_MY_GATEWAY_URL")
     if not url:
         logger.warning("Gateway URL not set — gateway tools unavailable")
         return None
-    return MCPClient(lambda: streamablehttp_client(
-        url=url, headers={"Authorization": auth_header}
-    ))
+    if not url.endswith("/mcp"):
+        url = url.rstrip("/") + "/mcp"
+    headers = {"Authorization": auth_header} if auth_header else {}
+    return MCPClient(lambda: streamablehttp_client(url=url, headers=headers))
 :::
 
 :::code{language=bash}

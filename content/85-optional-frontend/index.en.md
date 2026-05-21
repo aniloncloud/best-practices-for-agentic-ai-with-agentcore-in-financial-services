@@ -24,7 +24,7 @@ The `invoke_agent_runtime` boto3 API does not support JWT bearer token invocatio
 ### What You're Building
 
 :::code{language=bash showCopyAction=false}
-Browser (localhost:5000)  ← THIS LAB
+Browser (localhost:8501)  ← THIS LAB
     │
     ├── /login ──▶ Cognito Hosted UI (OAuth 2.0 code flow)
     │                    │
@@ -62,46 +62,20 @@ cd ..\..
 :::
 ::::
 
-## Step 2: Allow the Web Client in Your Runtime and Gateway
+## Step 2: Verify the Web Client Is Allowed
 
-In Lab 3, you configured `allowedClients` with the M2M Cognito client. The web login flow uses a different client (one that supports the authorization code flow). Add its client ID to both `allowedClients` arrays.
+Lab 3 already configured both Cognito app clients — the M2M client (`COGNITO_CLIENT_ID`) and the web client (`COGNITO_WEB_CLIENT_ID`) — in the `allowedClients` arrays for both the Runtime and Gateway. The web login flow uses the web client's authorization code grant, which is already permitted.
 
-Retrieve the web client ID:
-
-::::tabs{variant="container" groupId="os"}
-:::tab{label="macOS/Linux"}
-```bash
-WEB_CLIENT_ID=$(aws ssm get-parameter \
-  --name /app/portfolioadvisor/agentcore/web_client_id \
-  --query 'Parameter.Value' --output text)
-echo "Web Client ID: $WEB_CLIENT_ID"
-```
-:::
-:::tab{label="Windows"}
-```powershell
-$WEB_CLIENT_ID = aws ssm get-parameter `
-  --name /app/portfolioadvisor/agentcore/web_client_id `
-  --query 'Parameter.Value' --output text
-Write-Host "Web Client ID: $WEB_CLIENT_ID"
-
-```
-:::
-::::
-
-Open `agentcore/agentcore.json` in Kiro's editor. Find both `allowedClients` arrays — one inside the runtime block and one inside the gateway block — and add the web client ID alongside the existing M2M client ID:
+Verify by checking `agentcore/agentcore.json` — you should see two client IDs in each `allowedClients` array:
 
 :::code{language=json showCopyAction=false}
-"allowedClients": [
-  "<existing-m2m-client-id>",
-  "<WEB_CLIENT_ID value>"
-]
+"allowedClients": ["<COGNITO_CLIENT_ID>", "<COGNITO_WEB_CLIENT_ID>"]
 :::
 
-Then validate and deploy:
-
-:::code{language=bash}
-agentcore validate
-agentcore deploy -y -v
+:::alert{header="If you only see one client ID" type="warning"}
+If Lab 3 was configured with only the M2M client, add the web client ID now. Retrieve it with:
+`aws ssm get-parameter --name /app/portfolioadvisor/agentcore/web_client_id --query 'Parameter.Value' --output text`
+Then add it to both `allowedClients` arrays and run `agentcore deploy -y -v`.
 :::
 
 ## Step 3: Create the Frontend Directory

@@ -109,8 +109,8 @@ In Lab 5 you configured 100% evaluation sampling — useful for testing, expensi
 ::::tabs{variant="container" groupId="os"}
 :::tab{label="macOS/Linux"}
 ```bash
-# Pause the current evaluation config
-agentcore pause online-eval QualityMonitor
+# Remove the existing evaluation config (cannot re-add with the same name)
+agentcore remove online-eval --name QualityMonitor -y
 
 # Re-add with 20% sampling
 agentcore add online-eval \
@@ -125,8 +125,8 @@ agentcore deploy -y -v
 :::
 :::tab{label="Windows"}
 ```powershell
-# Pause the current evaluation config
-agentcore pause online-eval QualityMonitor
+# Remove the existing evaluation config (cannot re-add with the same name)
+agentcore remove online-eval --name QualityMonitor -y
 
 # Re-add with 20% sampling
 agentcore add online-eval `
@@ -161,11 +161,14 @@ Token usage is the primary cost driver. Use the AWS CLI to query consumption fro
 :::tab{label="macOS/Linux"}
 ```bash
 # Invocations for the last hour
+START_TIME=$(python3 -c "from datetime import datetime,timedelta,timezone; print((datetime.now(timezone.utc)-timedelta(hours=1)).strftime('%Y-%m-%dT%H:%M:%S'))")
+END_TIME=$(python3 -c "from datetime import datetime,timezone; print(datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S'))")
+
 aws cloudwatch get-metric-statistics \
   --namespace "AWS/Bedrock-AgentCore" \
   --metric-name "Invocations" \
-  --start-time $(date -u -v-1H +"%Y-%m-%dT%H:%M:%S") \
-  --end-time $(date -u +"%Y-%m-%dT%H:%M:%S") \
+  --start-time $START_TIME \
+  --end-time $END_TIME \
   --period 300 \
   --statistics Sum Average Maximum \
   --output table

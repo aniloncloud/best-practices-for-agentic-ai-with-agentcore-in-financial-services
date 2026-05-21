@@ -302,7 +302,7 @@ To demonstrate the "remove = revoke" pattern:
 :::tab{label="macOS/Linux"}
 ```bash
 # Remove the target — immediately revokes agent access
-agentcore remove gateway-target --name MarketData --gateway my-gateway
+agentcore remove gateway-target --name MarketData -y
 
 # Redeploy
 agentcore deploy -y -v
@@ -315,7 +315,7 @@ agentcore invoke "What's the market quote for AAPL?" \
 :::tab{label="Windows"}
 ```powershell
 # Remove the target — immediately revokes agent access
-agentcore remove gateway-target --name MarketData --gateway my-gateway
+agentcore remove gateway-target --name MarketData -y
 
 # Redeploy
 agentcore deploy -y -v

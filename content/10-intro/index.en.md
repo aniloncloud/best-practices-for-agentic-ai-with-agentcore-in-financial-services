@@ -49,7 +49,7 @@ dir app\PortfolioAdvisor\
 :::
 ::::
 
-You should see: `main.py`, `mcp_client/`, `tool/`, `pyproject.toml`
+You should see: `main.py`, `mcp_client/`, `model/`, `tool/`, `pyproject.toml`
 
 ### 4. Verify the AgentCore CLI
 

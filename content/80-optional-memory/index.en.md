@@ -146,49 +146,35 @@ Open `app/PortfolioAdvisor/main.py`. Make the following changes:
 from memory.session import get_memory_session_manager
 :::
 
-2. Replace the single global `_agent` setup with an agent factory that accepts `session_id` and `user_id`:
+2. Update `get_or_create_agent` to create a `session_manager` and pass it to the Agent. Add the `session_manager` parameter — everything else stays the same:
 
 :::code{language=python}
-_agent = None
-
-def get_or_create_agent(session_id, user_id):
-    global _agent
-    if _agent is None:
-        _agent = Agent(
+def get_or_create_agent(session_id=None, user_id=None, auth_header=""):
+    gateway_client = get_gateway_mcp_client(auth_header)
+    mcp_tools = [gateway_client] if gateway_client else []
+    tools = [get_stock_analysis, get_compliance_rules] + mcp_tools
+    session_manager = get_memory_session_manager(session_id, user_id) if session_id and user_id else None
+    try:
+        return Agent(
             model=load_model(),
-            session_manager=get_memory_session_manager(session_id, user_id),
             system_prompt=SYSTEM_PROMPT,
-            tools=tools
+            tools=tools,
+            session_manager=session_manager,
         )
-    return _agent
+    except (ValueError, Exception) as e:
+        log.warning(f"Agent creation failed with MCP tools, falling back: {e}")
+        return Agent(
+            model=load_model(),
+            system_prompt=SYSTEM_PROMPT,
+            tools=[get_stock_analysis, get_compliance_rules],
+            session_manager=session_manager,
+        )
 :::
 
-3. Update the `invoke` function to extract `user_id` from the request context and pass it to the factory:
+The `invoke` function already passes `session_id` and `user_id` from Lab 3 — no changes needed there. The `extract_user_id` function extracts the user from the JWT, which is what Memory uses as the `actor_id` to namespace stored facts per user.
 
-:::code{language=python}
-@app.entrypoint
-async def invoke(payload, context):
-    log.info("Invoking Agent.....")
-
-    session_id = context.session_id
-    user_id = context.request_headers['x-amzn-bedrock-agentcore-runtime-custom-user-id']
-
-    if not session_id or not user_id:
-        raise ValueError("session_id and user_id are required.")
-
-    agent = get_or_create_agent(session_id, user_id)
-    stream = agent.stream_async(payload.get("prompt"))
-    async for event in stream:
-        if "data" in event and isinstance(event["data"], str):
-            yield event["data"]
-:::
-
-4. Add the custom header to the allowlist in `agentcore/agentcore.json` (inside your runtime block):
-
-:::code{language=json}
-"requestHeaderAllowlist": [
-    "X-Amzn-Bedrock-AgentCore-Runtime-Custom-User-Id"
-]
+:::alert{header="Header allowlist" type="info"}
+Lab 3 already added `Authorization` and `X-Amzn-Bedrock-AgentCore-Runtime-Custom-User-Id` to `requestHeaderAllowlist` — no additional configuration needed here.
 :::
 
 ## Step 4: Deploy
@@ -279,15 +265,14 @@ Get a token, then teach the agent about a client in **Session A**:
 TOKEN=$(aws cognito-idp initiate-auth \
   --auth-flow USER_PASSWORD_AUTH \
   --client-id $(aws ssm get-parameter --name /app/portfolioadvisor/agentcore/web_client_id --query 'Parameter.Value' --output text) \
-  --auth-parameters USERNAME=workshopuser@example.com,PASSWORD=WorkshopPass1! \
+  --auth-parameters USERNAME=workshopuser@example.com,PASSWORD='WorkshopPass1!' \
   --query 'AuthenticationResult.AccessToken' --output text)
 
 SESSION_A=$(python3 -c 'import uuid; print(uuid.uuid4())')
 
 agentcore invoke "My name is Alex Chen. I prefer conservative dividend stocks. My risk tolerance is moderate." \
   --session-id $SESSION_A \
-  --bearer-token "$TOKEN" \
-  -H "X-Amzn-Bedrock-AgentCore-Runtime-Custom-User-Id: AlexChen" --stream
+  --bearer-token "$TOKEN" --stream
 ```
 :::
 :::tab{label="Windows"}
@@ -295,19 +280,22 @@ agentcore invoke "My name is Alex Chen. I prefer conservative dividend stocks. M
 $TOKEN = aws cognito-idp initiate-auth `
   --auth-flow USER_PASSWORD_AUTH `
   --client-id (aws ssm get-parameter --name /app/portfolioadvisor/agentcore/web_client_id --query 'Parameter.Value' --output text) `
-  --auth-parameters USERNAME=workshopuser@example.com,PASSWORD=WorkshopPass1! `
+  --auth-parameters "USERNAME=workshopuser@example.com,PASSWORD=WorkshopPass1!" `
   --query 'AuthenticationResult.AccessToken' --output text
 
 $SESSION_A = [guid]::NewGuid().ToString()
 
 agentcore invoke "My name is Alex Chen. I prefer conservative dividend stocks. My risk tolerance is moderate." `
   --session-id $SESSION_A `
-  --bearer-token "$TOKEN" `
-  -H "X-Amzn-Bedrock-AgentCore-Runtime-Custom-User-Id: AlexChen" --stream
+  --bearer-token "$TOKEN" --stream
 
 ```
 :::
 ::::
+
+:::alert{header="How Memory identifies users" type="info"}
+The `extract_user_id` function (added in Lab 3) extracts the user identity from the JWT. Memory uses this as the `actor_id` to namespace stored facts. Since `workshopuser@example.com` always gets the same JWT `username` claim, preferences persist correctly across sessions for the same authenticated user.
+:::
 
 Wait ~2 minutes for memory extraction to process, then start a **completely new session** and ask:
 
@@ -320,8 +308,7 @@ SESSION_B=$(python3 -c 'import uuid; print(uuid.uuid4())')
 
 agentcore invoke "Do you know anything about me?" \
   --session-id $SESSION_B \
-  --bearer-token "$TOKEN" \
-  -H "X-Amzn-Bedrock-AgentCore-Runtime-Custom-User-Id: AlexChen" --stream
+  --bearer-token "$TOKEN" --stream
 ```
 :::
 :::tab{label="Windows"}
@@ -332,8 +319,7 @@ $SESSION_B = [guid]::NewGuid().ToString()
 
 agentcore invoke "Do you know anything about me?" `
   --session-id $SESSION_B `
-  --bearer-token "$TOKEN" `
-  -H "X-Amzn-Bedrock-AgentCore-Runtime-Custom-User-Id: AlexChen" --stream
+  --bearer-token "$TOKEN" --stream
 
 ```
 :::

@@ -12,5 +12,7 @@ def get_gateway_mcp_client(auth_header: str = "") -> MCPClient | None:
     if not url:
         logger.warning("Gateway URL not set — gateway tools unavailable")
         return None
+    if not url.endswith("/mcp"):
+        url = url.rstrip("/") + "/mcp"
     headers = {"Authorization": auth_header} if auth_header else {}
     return MCPClient(lambda: streamablehttp_client(url=url, headers=headers))
