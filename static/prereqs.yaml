@@ -215,7 +215,112 @@ Resources:
               return event
 
   # ============================================================
-  # Portfolio Risk Check Lambda Function (used in Lab 3 — Gateway)
+  # Workshop Test User — used in Lab 3 (Security) and beyond
+  # ============================================================
+
+  CreateUserFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: workshop-create-cognito-user
+      Runtime: python3.13
+      Architectures:
+        - arm64
+      Handler: index.handler
+      Role: !GetAtt CreateUserFunctionRole.Arn
+      Timeout: 30
+      Environment:
+        Variables:
+          USER_POOL_ID: !Ref UserPool
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+          import os
+
+          def handler(event, context):
+              if event['RequestType'] == 'Delete':
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+                  return
+              try:
+                  client = boto3.client('cognito-idp')
+                  pool_id = os.environ['USER_POOL_ID']
+                  email = event['ResourceProperties']['Email']
+                  password = event['ResourceProperties']['Password']
+                  group = event['ResourceProperties'].get('Group', '')
+
+                  # Create user with permanent password
+                  client.admin_create_user(
+                      UserPoolId=pool_id,
+                      Username=email,
+                      UserAttributes=[
+                          {'Name': 'email', 'Value': email},
+                          {'Name': 'email_verified', 'Value': 'true'},
+                      ],
+                      MessageAction='SUPPRESS',
+                      TemporaryPassword=password,
+                  )
+                  # Set permanent password
+                  client.admin_set_user_password(
+                      UserPoolId=pool_id,
+                      Username=email,
+                      Password=password,
+                      Permanent=True,
+                  )
+                  # Add to group if specified
+                  if group:
+                      client.admin_add_user_to_group(
+                          UserPoolId=pool_id,
+                          Username=email,
+                          GroupName=group,
+                      )
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {'Username': email})
+              except client.exceptions.UsernameExistsException:
+                  # User already exists — treat as success
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {'Username': email})
+              except Exception as e:
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {'Error': str(e)})
+
+  CreateUserFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CognitoUserManagement
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cognito-idp:AdminCreateUser
+                  - cognito-idp:AdminSetUserPassword
+                  - cognito-idp:AdminAddUserToGroup
+                Resource: !GetAtt UserPool.Arn
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: arn:aws:logs:*:*:*
+
+  WorkshopUser:
+    Type: Custom::CognitoUser
+    DependsOn:
+      - CustomerGroup
+      - WebUserPoolClient
+    Properties:
+      ServiceToken: !GetAtt CreateUserFunction.Arn
+      Email: workshopuser@example.com
+      Password: 'WorkshopPass1!'
+      Group: customer
+
+  # ============================================================
+  # Portfolio Risk Check Lambda Function (used in Lab 2 — Gateway)
   # ============================================================
 
   PortfolioRiskLambdaRole:
@@ -317,7 +422,7 @@ Resources:
               }
 
   # ============================================================
-  # Execute Trade Lambda Function (used in Lab 7 — Policies)
+  # Execute Trade Lambda Function (used in Lab 2 — Gateway, Lab 4 — Policies)
   # ============================================================
 
   ExecuteTradeLambdaRole:
@@ -521,7 +626,7 @@ Resources:
         Application: PortfolioAdvisor
 
   # ============================================================
-  # SSM Parameter — Portfolio Risk Lambda ARN (used in Lab 3)
+  # SSM Parameter — Portfolio Risk Lambda ARN (used in Lab 2)
   # ============================================================
 
   PortfolioRiskLambdaArnParameter:
@@ -535,7 +640,7 @@ Resources:
         Application: PortfolioAdvisor
 
   # ============================================================
-  # SSM Parameter — Execute Trade Lambda ARN (used in Lab 7)
+  # SSM Parameter — Execute Trade Lambda ARN (used in Lab 2)
   # ============================================================
 
   ExecuteTradeLambdaArnParameter:
@@ -549,7 +654,7 @@ Resources:
         Application: PortfolioAdvisor
 
   # ============================================================
-  # VPC Resources (used in Lab 8 — VPC Integration)
+  # VPC Resources (used in Lab 6 — VPC Integration)
   # ============================================================
 
   WorkshopVPC:
@@ -797,7 +902,7 @@ Resources:
         - !Ref AgentCoreSecurityGroup
 
   # ============================================================
-  # SSM Parameters — VPC (used in Lab 8)
+  # SSM Parameters — VPC (used in Lab 6)
   # ============================================================
 
   VpcIdParameter:
