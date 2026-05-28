@@ -3,14 +3,14 @@ title: "At an AWS Event"
 weight: 11
 ---
 
-If you are attending an AWS Immersion Day, AWS Workshop, or similar AWS led event, you will be provided with access to a temporary AWS account pre-configured with all the necessary resources.
+If you are attending an AWS Immersion Day, AWS Workshop, or similar AWS led event, you will be provided with access to a temporary AWS account pre-configured with all the necessary resources — including a browser-based VS Code development environment.
 
 ## Before you start
 
 - Sign out of all AWS accounts in all browser windows
 - Review the event terms and conditions. Do not upload personal or confidential information to the account
 - The AWS account will only be available during the workshop — back up any materials you want to keep
-- All workshop content is available in the public [AgentCore CLI](https://github.com/aws/agentcore-cli) repository on GitHub
+- No local software installation is required — everything runs in your browser
 
 ## Workshop Studio AWS Account access
 
@@ -19,147 +19,92 @@ If you are attending an AWS Immersion Day, AWS Workshop, or similar AWS led even
 3. Enter your email, receive the passcode by email, and sign in
 4. Review the terms and conditions and click "Join event"
 5. On the event page, choose "Open AWS console"
-6. Verify you are in the correct region (check with your instructor)
+6. Verify you are in the **us-west-2** region
 
-## Local environment setup
+## Access Your VS Code Development Environment
 
-Once you have access to the AWS account, set up your local environment:
+Your workshop environment includes a browser-based VS Code server (code-server) with all tools pre-installed. No local setup is needed.
 
-### 1. Install latest AWS CLI
-If you haven't installed AWS CLI yet, follow the [instructions](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html#getting-started-install-instructions) to install AWS CLI on your local machine.
+### 1. Find the VS Code Server URL
 
-### 2. Install Node.js 20.x or later
+In the AWS Console, navigate to **CloudFormation** → **Stacks** → select the **DevBox** stack → **Outputs** tab.
 
-:::code{language=bash}
-node --version  # Should be v20.x or later
+Find the output labeled **01LandingPageUrl** — this is your VS Code Server URL. Click the link to open it in a new browser tab.
+
+:::alert{header="First Load" type="info"}
+The first time you open the URL, it may take 30-60 seconds for the page to load while CloudFront establishes the connection.
 :::
 
-If you have an older version or Node.js is not installed, download from https://nodejs.org/ or use a version manager:
+### 2. Retrieve Your Password
 
-::::tabs{variant="container" groupId="os"}
-:::tab{label="macOS/Linux"}
+In the same CloudFormation **Outputs** tab, find the output labeled **02CodeServerPassword**. Click the Secrets Manager link to open the secret in the AWS Console.
+
+1. In Secrets Manager, click **Retrieve secret value**
+2. Copy the password value
+3. Paste it into the code-server login page in your browser
+
+:::alert{header="Tip" type="info"}
+You can also retrieve the password from the terminal (once logged in) or via the AWS CLI:
 ```bash
-# Using nvm
-nvm install 20
-nvm use 20
-
-# Verify
-node --version
+aws secretsmanager get-secret-value \
+  --secret-id devbox-codeserver-password \
+  --query SecretString --output text
 ```
 :::
-:::tab{label="Windows"}
-```powershell
-# Using nvm-windows (https://github.com/coreybutler/nvm-windows)
-nvm install 20
-nvm use 20
 
-# Verify
-node --version
+### 3. Verify Your Environment
 
-```
-:::
-::::
-
-### 3. Install uv (Python package manager)
-
-::::tabs{variant="container" groupId="os"}
-:::tab{label="macOS/Linux"}
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Verify
-uv --version
-```
-:::
-:::tab{label="Windows"}
-```powershell
-powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
-
-# Verify
-uv --version
-
-```
-:::
-::::
-
-### 4. Install AgentCore CLI
+Once logged into VS Code Server, open a terminal (**Terminal → New Terminal** or `` Ctrl+` ``):
 
 :::code{language=bash}
-npm install -g @aws/agentcore
+# Verify Python 3.11 virtual environment is active
+python --version
 
-# Verify
-agentcore --version
-:::
+# Verify workshop dependencies
+pip show strands-agents bedrock-agentcore
 
-> **Note:** If you previously installed the `bedrock-agentcore-starter-toolkit`, uninstall it first to avoid conflicts:
-:::code{language=bash}
-
-uv tool uninstall bedrock-agentcore-starter-toolkit
-
-# or
-pip uninstall bedrock-agentcore-starter-toolkit -y
-:::
-
-### 5. Install Kiro IDE
-
-Download and install Kiro from https://kiro.dev/downloads/
-
-After installing, open Kiro and launch the integrated terminal where you'll run all workshop commands:
-
-- **macOS:** Press `` Cmd+` `` (backtick)
-- **Windows/Linux:** Press `` Ctrl+` `` (backtick)
-- **Or:** Go to the menu **View → Terminal**
-
-> **Tip:** You can also describe what you want to do in natural language in Kiro's chat, and it will suggest the terminal command for you. See [Terminal integration](https://kiro.dev/docs/chat/terminal) for details.
-
-All commands from this point forward should be run in Kiro's integrated terminal.
-
-### 6. Configure AWS credentials
-Click on the `Get AWS CLI credentials` option in your workshop left-hand side menu:
-![Step 1](/static/10-intro/GetAWSCLICredentials.png)
-
-Copy the temporary credentials from Workshop Studio:
-![Step 2](/static/10-intro/CopyCredentials.png)
-
-And past them in your terminal:
-
-::::tabs{variant="container" groupId="os"}
-:::tab{label="macOS/Linux"}
-```bash
-export AWS_ACCESS_KEY_ID=<your-access-key>
-export AWS_SECRET_ACCESS_KEY=<your-secret-key>
-export AWS_SESSION_TOKEN=<your-session-token>
-export AWS_DEFAULT_REGION=<your-region>
-```
-:::
-:::tab{label="Windows"}
-```powershell
-$env:AWS_ACCESS_KEY_ID = "<your-access-key>"
-$env:AWS_SECRET_ACCESS_KEY = "<your-secret-key>"
-$env:AWS_SESSION_TOKEN = "<your-session-token>"
-$env:AWS_DEFAULT_REGION = "<your-region>"
-
-```
-:::
-::::
-
-### 7. Verify setup
-
-:::code{language=bash}
-# Check AWS credentials
+# Verify AWS credentials (pre-configured via instance profile)
 aws sts get-caller-identity
 
-# Check AgentCore CLI
-agentcore --help
+# Verify Docker
+docker --version
 
-# Check Node.js
-node --version
-
-# Check uv
-uv --version
+# Verify region
+aws configure get region
 :::
 
-You are now ready to start Lab 1!
+Expected:
+- Python 3.11.x
+- `strands-agents` and `bedrock-agentcore` packages installed
+- Valid AWS identity (EC2 instance role)
+- Docker available
+- Region: `us-west-2`
+
+### 4. Explore the Workshop Files
+
+Your workspace is pre-loaded with the workshop project:
+
+:::code{language=bash}
+cd ~/PortfolioAdvisor
+ls app/PortfolioAdvisor/
+:::
+
+You should see: `main.py`, `mcp_client/`, `model/`, `tool/`, `pyproject.toml`
+
+## What's Pre-Installed
+
+Your DevBox development environment includes:
+
+| Tool | Version | Purpose |
+|------|---------|---------|
+| **Python** | 3.11 | Agent runtime |
+| **strands-agents** | Latest | Agent framework |
+| **bedrock-agentcore** | Latest | AgentCore SDK |
+| **mcp** | Latest | Model Context Protocol client |
+| **Docker** | Latest | Container builds for AgentCore Runtime |
+| **AWS CLI** | v2 | AWS resource management |
+| **Node.js** | 20.x | AgentCore CLI |
+| **AgentCore CLI** | Latest | `agentcore` commands |
 
 ## Enable Transaction Search (for Observability)
 
@@ -179,3 +124,5 @@ This is a one-time prerequisite to view observability metrics in CloudWatch. You
 Toggle **Enable Transaction Search** and click **Save**:
 
 ![X-Ray Transaction Search enable toggle](/static/images/xray-enable-transaction-search.png)
+
+**You are now ready to start the workshop!**
