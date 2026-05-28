@@ -54,7 +54,20 @@ infrastructure:
     # Transaction Log CFN
     - templateLocation: static/workshop-resources.yaml
       label: WorkshopResources
-    
+
     # Workshop resources
     - templateLocation: static/prereqs.yaml
       label: WorkshopPreRequisites
+
+    # Browser-based VS Code development environment
+    - templateLocation: static/devbox.yaml
+      label: DevBox
+      parameters:
+        - templateParameter: S3AssetBucket
+          defaultValue: '{{.AssetsBucketName}}'
+        - templateParameter: S3AssetPrefix
+          defaultValue: '{{.AssetsBucketPrefix}}'
+        - templateParameter: DeployPipeline
+          defaultValue: 'false'
+        - templateParameter: AutoSetDeveloperProfile
+          defaultValue: 'true'
