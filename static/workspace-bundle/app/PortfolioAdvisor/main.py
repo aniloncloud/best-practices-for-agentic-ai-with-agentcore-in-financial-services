@@ -1,12 +1,14 @@
-import json
-import logging
+from typing import Any
 
 from strands import Agent, tool
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
 from model.load import load_model
+from mcp_client.client import get_streamable_http_mcp_client
 
 app = BedrockAgentCoreApp()
 log = app.logger
+
+
 
 STOCKS = {
     "AAPL": {"name": "Apple Inc.", "price": 178.52, "change": 2.35, "pe_ratio": 28.4, "market_cap": "2.8T", "sector": "Technology", "recommendation": "Buy", "risk_level": "Medium"},
@@ -92,14 +94,17 @@ def get_or_create_agent(session_id=None, user_id=None, auth_header=""):
         tools=tools,
     )
 
-
 @app.entrypoint
 async def invoke(payload, context):
-    log.info("Invoking Agent...")
+    log.info("Invoking Agent.....")
     session_id = context.session_id
     agent = get_or_create_agent(session_id)
+
+    # Execute and format response
     stream = agent.stream_async(payload.get("prompt"))
+
     async for event in stream:
+        # Handle Text parts of the response
         if "data" in event and isinstance(event["data"], str):
             yield event["data"]
 
