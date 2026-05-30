@@ -14,11 +14,11 @@ test('AgentCoreStack synthesizes with empty spec', () => {
       credentials: [],
       evaluators: [],
       onlineEvalConfigs: [],
+      configBundles: [],
       policyEngines: [],
       agentCoreGateways: [],
       mcpRuntimeTools: [],
       unassignedTargets: [],
-      datasets: [],
     },
   });
   const template = Template.fromStack(stack);
