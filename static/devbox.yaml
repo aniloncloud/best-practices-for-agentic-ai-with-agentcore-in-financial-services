@@ -1454,11 +1454,12 @@ Resources:
           su - ec2-user -c "source /home/ec2-user/workspace/my-workspace/venv/bin/activate && pip install --upgrade pip && pip install 'bedrock-agentcore>=1.0.3' 'strands-agents>=1.13.0' 'mcp>=1.19.0' 'botocore[crt]>=1.35.0' 'aws-opentelemetry-distro' boto3 requests"
 
           # Install nvm
-          curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.4/install.sh | bash
-          nvm install 20
-          nvm use 20
-          # Install agentcore cli
-          npm install -g @aws/agentcore
+          su - ec2-user -c "curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.4/install.sh | bash"
+          su - ec2-user -c "nvm install 20"
+          su - ec2-user -c "nvm use 20" 
+          
+          # Install agentcore CLI
+          su - ec2-user -c "npm install -g @aws/agentcore"
 
 
           # Auto-activate venv in new terminals

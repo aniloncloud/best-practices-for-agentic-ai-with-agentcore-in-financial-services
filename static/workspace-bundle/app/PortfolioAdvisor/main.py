@@ -1,4 +1,4 @@
-# --- Starting Agent Code for Lab1 ---
+# --- Starting Local Agent Code for Lab1 ---
 import json
 import logging
 
