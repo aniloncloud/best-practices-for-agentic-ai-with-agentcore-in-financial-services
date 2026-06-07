@@ -50,7 +50,7 @@ The following resources are provisioned before participants arrive. Participants
 
 **Services used:** Amazon Bedrock (Claude Sonnet), Amazon Cognito, AWS Lambda, Amazon VPC, Amazon EC2 (ENIs), AWS Systems Manager Parameter Store, Amazon CloudWatch, Amazon Bedrock AgentCore (Runtime, Gateway, Evaluations, Policy)
 
-**Model access:** Bedrock model access for **Claude Sonnet** must be enabled in **us-west-2** before participants start. This is typically pre-enabled in Workshop Studio accounts, but verify it before the event. In the Bedrock console: Model access → Request model access → Claude Sonnet. Activation takes approximately 1 minute.
+**Model access:** Bedrock model access for **Claude Sonnet 4.5** is pre-enabled in Workshop Studio accounts for **us-west-2**. No manual action is required. As a sanity check, verify in the Bedrock console (Model access) that Claude Sonnet 4.5 shows as "Access granted" before the session begins.
 
 **Region:** This workshop runs in **us-west-2 only.** All AgentCore features used are generally available in us-west-2. SSM parameter names, Lambda function names, and VPC endpoint service names are hardcoded to us-west-2. Do not attempt to run the workshop in other regions.
 
@@ -133,7 +133,7 @@ The original workshop had participants scaffold, write, and iteratively build th
 - Start provisioning Workshop Studio accounts at least 15 minutes before the session begins. The pre-provisioning stack takes 3–5 minutes to deploy.
 - Verify VS Code Server is reachable and the `~/PortfolioAdvisor/` directory is populated before participants start.
 - Keep one fully-deployed environment for live demos. If you ran the workshop yourself in advance, do not tear it down until after the event.
-- Confirm Claude Sonnet model access is enabled in Bedrock for us-west-2.
+- Verify Claude Sonnet 4.5 model access shows as "Access granted" in Bedrock for us-west-2 (pre-enabled by the account template).
 
 ### FSI-Specific Facilitation Notes
 
@@ -200,9 +200,9 @@ The original workshop had participants scaffold, write, and iteratively build th
 
 #### 5. Model Access Denied on First Agent Invocation
 
-**Cause:** Claude Sonnet model access is not enabled in the Bedrock console for us-west-2.
+**Cause:** Claude Sonnet 4.5 model access is not active in us-west-2. This is pre-enabled by the Workshop Studio account template and should not occur under normal circumstances.
 
-**Fix:** In the Bedrock console → Model access → Enable Claude Sonnet. Takes approximately 1 minute. This should be pre-configured in Workshop Studio accounts — verify before the event.
+**Fix:** In the Bedrock console → Model access → verify Claude Sonnet 4.5 shows "Access granted." If not, request access — activation takes approximately 1 minute.
 
 #### 6. VPC Limit Exceeded (Lab 6)
 

@@ -1,0 +1,215 @@
+# Workshop bootstrap stack - runs manage-workshop-stack.sh via CodeBuild
+# Based on: https://catalog.workshops.aws/docs/en-US/cookbook/bootstrapping-with-bash-script
+Parameters:
+  RepoUrl:
+    Type: String
+    Description: The URL of the repo that the CodeBuild project will clone.
+  RepoBranchName:
+    Type: String
+    Default: main
+    Description: The name of the branch that the CodeBuild project will clone.
+  ParticipantRoleArn:
+    Type: String
+    Default: ""
+    Description: The ARN belonging to the role for whom these resources are being created.
+  ParticipantAssumedRoleArn:
+    Type: String
+    Default: ""
+    Description: The ARN belonging to the assumed role identity for whom these resources are being created.
+  AssetsBucketName:
+    Type: String
+    Default: ""
+    Description: The S3 Bucket containing assets for use by this stack or the resources created by it.
+  AssetsBucketPrefix:
+    Type: String
+    Default: ""
+    Description: The prefix under which the assets are located (must end with "/").
+  IsWorkshopStudioEnv:
+    Type: String
+    Default: "no"
+    AllowedValues:
+      - "no"
+      - "yes"
+    Description: Whether this stack is being deployed in a Workshop Studio environment.
+Resources:
+  WSCodeBuildServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+            Action: sts:AssumeRole
+      Description: Workshop Studio CodeBuild Service Role
+      ManagedPolicyArns:
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/AdministratorAccess"
+  CodeBuildTriggerLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Description: Role for Lambda to trigger CodeBuild
+      ManagedPolicyArns:
+        - !Ref CodeBuildTriggerLambdaRolePolicy
+  CodeBuildTriggerLambdaRolePolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Policy for Lambda to trigger CodeBuild
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - codebuild:StartBuild
+              - codebuild:StopBuild
+              - codebuild:BatchGetBuilds
+            Resource: !GetAtt InstallWorkshopStack.Arn
+          - Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource: !GetAtt TriggerCodeBuildLogGroup.Arn
+  TriggerCodeBuildLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      LogGroupName: "/aws/lambda/trigger-codebuild-function"
+      RetentionInDays: 7
+  InstallWorkshopStack:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: "install-workshop-stack-codebuild"
+      Artifacts:
+        Type: NO_ARTIFACTS
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        EnvironmentVariables:
+          - Name: REPO_URL
+            Type: PLAINTEXT
+            Value: !Ref RepoUrl
+          - Name: REPO_BRANCH_NAME
+            Type: PLAINTEXT
+            Value: !Ref RepoBranchName
+          - Name: IS_WORKSHOP_STUDIO_ENV
+            Type: PLAINTEXT
+            Value: !Ref IsWorkshopStudioEnv
+          - Name: PARTICIPANT_ROLE_ARN
+            Type: PLAINTEXT
+            Value: !Ref ParticipantRoleArn
+          - Name: PARTICIPANT_ASSUMED_ROLE_ARN
+            Type: PLAINTEXT
+            Value: !Ref ParticipantAssumedRoleArn
+          - Name: ASSETS_BUCKET_NAME
+            Type: PLAINTEXT
+            Value: !Ref AssetsBucketName
+          - Name: ASSETS_BUCKET_PREFIX
+            Type: PLAINTEXT
+            Value: !Ref AssetsBucketPrefix
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:5.0
+        ImagePullCredentialsType: CODEBUILD
+        PrivilegedMode: true
+        Type: LINUX_CONTAINER
+      ServiceRole: !GetAtt WSCodeBuildServiceRole.Arn
+      Source:
+        Type: NO_SOURCE
+        BuildSpec: |-
+          {
+            "version": "0.2",
+            "env": {
+              "shell": "bash"
+            },
+            "phases": {
+              "build": {
+                "commands": [
+                  "mkdir workshop && cd workshop",
+                  "git clone --depth 1 --branch $REPO_BRANCH_NAME $REPO_URL .",
+                  "echo $EVENT_REQUEST_TYPE",
+                  "chmod +x ./manage-workshop-stack.sh",
+                  "./manage-workshop-stack.sh $EVENT_REQUEST_TYPE"
+                ]
+              },
+              "post_build": {
+                "commands": [
+                  "if [ \"$CODEBUILD_BUILD_SUCCEEDING\" == \"1\" ]; then export STATUS=\"SUCCESS\"; fi",
+                  "if [ \"$CODEBUILD_BUILD_SUCCEEDING\" != \"1\" ]; then export STATUS=\"FAILED\"; fi",
+                  "export JSON_DATA=\"{\\\"Status\\\" : \\\"$STATUS\\\", \\\"Reason\\\" : \\\"See the details in CloudWatch Log Stream: $CONTEXT_LOG_STREAM_NAME\\\", \\\"StackId\\\" : \\\"$EVENT_STACK_ID\\\", \\\"PhysicalResourceId\\\" : \\\"$CONTEXT_LOG_STREAM_NAME\\\", \\\"RequestId\\\" : \\\"$EVENT_REQUEST_ID\\\", \\\"LogicalResourceId\\\" : \\\"$EVENT_LOGICAL_RESOURCE_ID\\\" }\"",
+                  "echo \"$JSON_DATA\"",
+                  "curl -X PUT --data-binary \"$JSON_DATA\" \"$EVENT_RESPONSE_URL\""
+                ]
+              }
+            }
+          }
+      Cache:
+        Type: NO_CACHE
+      EncryptionKey: alias/aws/s3
+      TimeoutInMinutes: 30
+  TriggerCodeBuild:
+    Type: AWS::Lambda::Function
+    DependsOn: CodeBuildTriggerLambdaRole
+    Properties:
+      FunctionName: "trigger-codebuild-function"
+      Runtime: python3.11
+      Handler: index.lambda_handler
+      Timeout: 900
+      ReservedConcurrentExecutions: 1
+      Role: !GetAtt CodeBuildTriggerLambdaRole.Arn
+      Environment:
+        Variables:
+          PROJECT_NAME: !Ref InstallWorkshopStack
+      Code:
+        ZipFile: |-
+          import boto3
+          import os
+
+          def lambda_handler(event, context):
+              print(event)
+              project_name = os.environ.get("PROJECT_NAME")
+              cb_cli = boto3.client("codebuild")
+              cb_env_vars = [
+                  {
+                      'name': 'EVENT_REQUEST_TYPE',
+                      'value': event['RequestType'],
+                      'type': 'PLAINTEXT'
+                  },
+                  {
+                      'name': 'EVENT_REQUEST_ID',
+                      'value': event['RequestId'],
+                      'type': 'PLAINTEXT'
+                  },
+                  {
+                      'name': 'EVENT_STACK_ID',
+                      'value': event['StackId'],
+                      'type': 'PLAINTEXT'
+                  },
+                  {
+                      'name': 'EVENT_LOGICAL_RESOURCE_ID',
+                      'value': event['LogicalResourceId'],
+                      'type': 'PLAINTEXT'
+                  },
+                  {
+                      'name': 'EVENT_RESPONSE_URL',
+                      'value': event['ResponseURL'],
+                      'type': 'PLAINTEXT'
+                  },
+                  {
+                      'name': 'CONTEXT_LOG_STREAM_NAME',
+                      'value': context.log_stream_name,
+                      'type': 'PLAINTEXT'
+                  },
+              ]
+              cb_cli.start_build(projectName=project_name, environmentVariablesOverride=cb_env_vars)
+  CustomProvisioningResource:
+    Type: AWS::CloudFormation::CustomResource
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      ServiceToken: !GetAtt TriggerCodeBuild.Arn

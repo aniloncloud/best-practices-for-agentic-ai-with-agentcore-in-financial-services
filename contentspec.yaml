@@ -62,6 +62,7 @@ infrastructure:
     # Browser-based VS Code development environment
     - templateLocation: static/devbox.yaml
       label: DevBox
+      participantAllStackOutputsVisible: true
       parameters:
         - templateParameter: S3AssetBucket
           defaultValue: '{{.AssetsBucketName}}'

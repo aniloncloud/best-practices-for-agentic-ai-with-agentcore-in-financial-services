@@ -1458,13 +1458,23 @@ Resources:
           su - ec2-user -c "nvm install 20"
           su - ec2-user -c "nvm use 20" 
           
-          # Install agentcore CLI
+          # Install agentcore CLI and CDK dependencies
           su - ec2-user -c "npm install -g @aws/agentcore"
+          su - ec2-user -c "cd /home/ec2-user/workspace/my-workspace/agentcore/cdk && npm install"
 
 
           # Auto-activate venv in new terminals
           echo 'source /home/ec2-user/workspace/my-workspace/venv/bin/activate' >> /home/ec2-user/.bashrc
           chown ec2-user:ec2-user /home/ec2-user/.bashrc
+
+          # Create symlink so lab instructions (cd ~/PortfolioAdvisor) work
+          ln -sf /home/ec2-user/workspace/my-workspace /home/ec2-user/PortfolioAdvisor
+          chown -h ec2-user:ec2-user /home/ec2-user/PortfolioAdvisor
+
+          # Populate aws-targets.json with this account's ID and region
+          echo '[{"name":"default","description":"Workshop deployment target","account":"${AWS::AccountId}","region":"${AWS::Region}"}]' > /home/ec2-user/workspace/my-workspace/agentcore/aws-targets.json
+          chown ec2-user:ec2-user /home/ec2-user/workspace/my-workspace/agentcore/aws-targets.json
+
 
           echo "INFO: Workshop setup completed at $(date)"
 
@@ -1720,7 +1730,12 @@ Resources:
                 Resource: "*"
               - Effect: Allow
                 Action:
+                  - cloudformation:*
+                Resource: "*"
+              - Effect: Allow
+                Action:
                   - sts:GetCallerIdentity
+                  - sts:AssumeRole
                 Resource: "*"
       Tags:
         - Key: Name

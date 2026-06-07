@@ -25,7 +25,7 @@ Instructions for running the AgentCore CLI Workshop in your own AWS account.
 ### AWS account
 
 - An AWS account with permissions to create IAM roles, Lambda functions, CloudFormation stacks, and AgentCore resources
-- Amazon Bedrock model access enabled for your chosen model (default: Claude Sonnet 4.5 via Bedrock)
+- Amazon Bedrock model access. As of October 2025, AWS enables all serverless foundation models (including Claude Sonnet 4.5) by default in commercial regions, so no manual model-access step is required. If you are on an older account where a model isn't already enabled, make sure your IAM principal includes `aws-marketplace:ViewSubscriptions` (included in the policy below) so the first invocation can complete the automatic subscription check.
 
 ## Setup
 
@@ -238,7 +238,8 @@ Your IAM user or role needs the following permissions. You can create a custom p
                 "bedrock:InvokeModelWithResponseStream",
                 "bedrock:CountTokens",
                 "bedrock:TagResource",
-                "bedrock:UntagResource"
+                "bedrock:UntagResource",
+                "aws-marketplace:ViewSubscriptions"
             ],
             "Resource": "*"
         },

@@ -8,3 +8,21 @@ assets/*
 .omc/
 .gstack/
 conductor/
+
+# Python build/runtime artifacts
+**/__pycache__/
+*.pyc
+**/venv/
+**/.venv/
+
+# Node / CDK build artifacts
+**/node_modules/
+**/cdk.out/
+
+# Secrets — never commit
+**/.env.local
+
+# AgentCore instance-specific state (regenerated per account/region;
+# aws-targets.json is written by devbox.yaml, deployed-state.json by `agentcore deploy`)
+static/workspace-bundle/agentcore/.cli/deployed-state.json
+static/workspace-bundle/agentcore/aws-targets.json
