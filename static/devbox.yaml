@@ -1573,6 +1573,10 @@ Resources:
                 Resource: 
                   - !Sub arn:${AWS::Partition}:s3:::${PrefixCode}-*
                   - !Sub arn:${AWS::Partition}:s3:::${PrefixCode}-*/*
+                  # CDK bootstrap staging bucket created by `agentcore deploy`
+                  # (e.g. cdk-hnb659fds-assets-<account>-<region>)
+                  - !Sub arn:${AWS::Partition}:s3:::cdk-*
+                  - !Sub arn:${AWS::Partition}:s3:::cdk-*/*
         - PolicyName: !Sub ${PrefixCode}-iampolicy-terraform-cloudfront
           PolicyDocument:
             Version: 2012-10-17
