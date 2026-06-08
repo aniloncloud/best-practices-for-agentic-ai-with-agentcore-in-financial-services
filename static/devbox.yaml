@@ -1619,14 +1619,13 @@ Resources:
             Statement:          
               - Effect: Allow
                 Action:
-                  - ec2:DescribeDhcpOptions
-                  - ec2:DescribeInstances # test aws cli commands
-                  - ec2:DescribeNetworkInterfaces
-                  - ec2:DescribeSubnets
-                  - ec2:DescribeSecurityGroups
-                  - ec2:DescribeVpcs
-                  - ec2:DeleteNetworkInterface
+                  # VPC mode (Lab 6): ENI lifecycle + read of subnets/SGs/VPCs/endpoints
+                  - ec2:Describe*
                   - ec2:CreateNetworkInterface
+                  - ec2:DeleteNetworkInterface
+                  - ec2:CreateNetworkInterfacePermission
+                  - ec2:DeleteNetworkInterfacePermission
+                  - ec2:CreateTags
                 Resource: "*"
         # ============================================================
         # Workshop-specific policies (AgentCore, Bedrock, Cognito, etc.)
@@ -1637,42 +1636,28 @@ Resources:
             Statement:
               - Effect: Allow
                 Action:
+                  # AgentCore control + data plane: Runtime, Gateway, Identity,
+                  # Memory, Policy/Cedar, Evaluations (Labs 1-9)
                   - bedrock-agentcore:*
+                  - bedrock-agentcore-control:*
                 Resource: "*"
               - Effect: Allow
                 Action:
-                  - bedrock:InvokeModel
-                  - bedrock:InvokeModelWithResponseStream
-                  - bedrock:Get*
-                  - bedrock:List*
-                  - bedrock:TagResource
-                  - bedrock:UntagResource
-                  - bedrock:CreateGuardrail
-                  - bedrock:CreateGuardrailVersion
-                  - bedrock:UpdateGuardrail
-                  - bedrock:DeleteGuardrail
-                  - bedrock:ApplyGuardrail
+                  # Model invocation, guardrails, and evaluation judge models
+                  - bedrock:*
                 Resource: "*"
               - Effect: Allow
                 Action:
                   - cognito-idp:*
+                  - cognito-identity:*
                 Resource: "*"
               - Effect: Allow
                 Action:
-                  - lambda:InvokeFunction
-                  - lambda:GetFunction
-                  - lambda:ListFunctions
-                  - lambda:CreateFunction
-                  - lambda:DeleteFunction
-                  - lambda:AddPermission
+                  - lambda:*
                 Resource: "*"
               - Effect: Allow
                 Action:
-                  - ssm:GetParameter
-                  - ssm:GetParameters
-                  - ssm:GetParametersByPath
-                  - ssm:PutParameter
-                  - ssm:DeleteParameter
+                  - ssm:*
                 Resource: "*"
               - Effect: Allow
                 Action:
@@ -1680,53 +1665,22 @@ Resources:
                 Resource: "*"
               - Effect: Allow
                 Action:
-                  - iam:CreateRole
-                  - iam:CreatePolicy
-                  - iam:AttachRolePolicy
-                  - iam:PutRolePolicy
-                  - iam:GetRole
-                  - iam:GetPolicy
-                  - iam:GetRolePolicy
-                  - iam:ListRolePolicies
-                  - iam:ListAttachedRolePolicies
-                  - iam:DeleteRole
-                  - iam:DeletePolicy
-                  - iam:DetachRolePolicy
-                  - iam:DeleteRolePolicy
-                  - iam:TagRole
-                  - iam:UntagRole
-                  - iam:UpdateAssumeRolePolicy
+                  # Full IAM: CDK bootstrap creates cdk-hnb659fds-* roles and
+                  # attaches AdministratorAccess to the cfn-exec role; PassRole
+                  # is needed to cloudformation/codebuild/bedrock/lambda. Workshop
+                  # accounts are ephemeral, so unconditional IAM is acceptable.
+                  - iam:*
                 Resource: "*"
-              - Effect: Allow
-                Action:
-                  - iam:PassRole
-                Resource: "*"
-                Condition:
-                  StringEquals:
-                    iam:PassedToService:
-                      - bedrock.amazonaws.com
-                      - bedrock-agentcore.amazonaws.com
-                      - lambda.amazonaws.com
-              - Effect: Allow
-                Action:
-                  - iam:CreateServiceLinkedRole
-                Resource:
-                  - !Sub arn:${AWS::Partition}:iam::*:role/aws-service-role/bedrock-agentcore.amazonaws.com/*
-                  - !Sub arn:${AWS::Partition}:iam::*:role/aws-service-role/bedrock.amazonaws.com/*
               - Effect: Allow
                 Action:
                   - logs:*
                   - cloudwatch:*
                   - xray:*
-                  - application-signals:StartDiscovery
+                  - application-signals:*
                 Resource: "*"
               - Effect: Allow
                 Action:
-                  - secretsmanager:CreateSecret
-                  - secretsmanager:GetSecretValue
-                  - secretsmanager:DeleteSecret
-                  - secretsmanager:PutSecretValue
-                  - secretsmanager:UpdateSecret
+                  - secretsmanager:*
                 Resource: "*"
               - Effect: Allow
                 Action:
