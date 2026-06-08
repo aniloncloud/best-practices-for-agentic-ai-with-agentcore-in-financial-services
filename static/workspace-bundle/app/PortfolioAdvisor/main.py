@@ -70,8 +70,11 @@ def get_compliance_rules(category: str) -> str:
     })
 
 
-# --- Gateway MCP Client (uncomment in Lab 2) ---
-# from mcp_client.client import get_gateway_mcp_client
+# --- Gateway MCP Client ---
+# Safe in every lab: get_gateway_mcp_client() returns None until a Gateway is
+# added (Lab 2) and its URL is injected as an environment variable. No edits
+# to this file are required as you progress through the labs.
+from mcp_client.client import get_gateway_mcp_client
 
 
 SYSTEM_PROMPT = """You are a portfolio advisor for a capital markets firm. You help clients with:
@@ -87,6 +90,12 @@ When asked to execute trades, use the execute_trade tool via the Gateway."""
 
 def get_or_create_agent(session_id=None, user_id=None, auth_header=""):
     tools = [get_stock_analysis, get_compliance_rules]
+    # Gateway tools are added automatically once a Gateway exists (Lab 2+).
+    # Until then get_gateway_mcp_client() returns None and the agent runs with
+    # only the local tools above — so this code is safe from Lab 1 onward.
+    gateway_client = get_gateway_mcp_client(auth_header)
+    if gateway_client:
+        tools.append(gateway_client)
     return Agent(
         model=load_model(),
         system_prompt=SYSTEM_PROMPT,
