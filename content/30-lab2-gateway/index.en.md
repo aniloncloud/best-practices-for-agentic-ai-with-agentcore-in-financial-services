@@ -139,29 +139,17 @@ agentcore add gateway-target `
 :::
 ::::
 
-## Step 4: Enable the MCP Client in Your Agent
+## Step 4: How the Agent Connects to the Gateway (no code change needed)
 
-Open `app/PortfolioAdvisor/main.py` in your editor. Find the commented-out MCP client section and uncomment it:
-
-**Change this:**
-```python
-# --- Gateway MCP Client (uncomment in Lab 2) ---
-# from mcp_client.client import get_gateway_mcp_client
-```
-
-**To this:**
-```python
-# --- Gateway MCP Client ---
-from mcp_client.client import get_gateway_mcp_client
-```
-
-Then update `get_or_create_agent` to include gateway tools:
+Your agent is **already wired to use Gateway tools** — there's nothing to edit in `main.py`. Open `app/PortfolioAdvisor/main.py` and look at `get_or_create_agent`:
 
 ```python
 def get_or_create_agent(session_id=None, user_id=None, auth_header=""):
+    tools = [get_stock_analysis, get_compliance_rules]
+    # Gateway tools are added automatically once a Gateway exists.
     gateway_client = get_gateway_mcp_client(auth_header)
-    mcp_tools = [gateway_client] if gateway_client else []
-    tools = [get_stock_analysis, get_compliance_rules] + mcp_tools
+    if gateway_client:
+        tools.append(gateway_client)
     return Agent(
         model=load_model(),
         system_prompt=SYSTEM_PROMPT,
@@ -169,7 +157,11 @@ def get_or_create_agent(session_id=None, user_id=None, auth_header=""):
     )
 ```
 
-Save the file.
+`get_gateway_mcp_client()` (in `mcp_client/client.py`) reads the Gateway URL from the `AGENTCORE_GATEWAY_MY_GATEWAY_URL` environment variable. In Lab 1 that variable didn't exist, so the function returned `None` and the agent ran with only its local tools. Now that you've added a Gateway, the next deploy injects that variable automatically — so `get_gateway_mcp_client()` returns a live MCP client and the Gateway's tools (`check_portfolio_risk`, `execute_trade`) become available to the agent.
+
+:::alert{header="Why no edit?" type="info"}
+The agent code is intentionally environment-driven: it picks up Gateway tools when a Gateway is present and falls back to local tools when it isn't. This keeps the agent code stable across every lab — you change configuration (`agentcore.json` and `agentcore add ...`), not application code.
+:::
 
 ## Step 5: Deploy
 
