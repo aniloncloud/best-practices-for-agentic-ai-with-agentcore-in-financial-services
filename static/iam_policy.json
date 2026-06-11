@@ -222,7 +222,7 @@
                 "*"
             ],
             "Condition": {
-                "StringEquals": {
+                "ForAnyValue:StringEquals": {
                     "aws-marketplace:ProductId": [
                         "prod-mxcfnwvpd6kb4",
                         "prod-xdkflymybwmvi",

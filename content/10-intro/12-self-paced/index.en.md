@@ -251,7 +251,7 @@ Your IAM user or role needs the following permissions. You can create a custom p
             ],
             "Resource": "*",
             "Condition": {
-                "StringEquals": {
+                "ForAnyValue:StringEquals": {
                     "aws-marketplace:ProductId": [
                         "prod-mxcfnwvpd6kb4",
                         "prod-xdkflymybwmvi",

@@ -1659,7 +1659,9 @@ Resources:
                   - aws-marketplace:Subscribe
                 Resource: "*"
                 Condition:
-                  StringEquals:
+                  # aws-marketplace:ProductId is a multi-valued context key;
+                  # Access Analyzer requires the ForAnyValue qualifier
+                  ForAnyValue:StringEquals:
                     aws-marketplace:ProductId:
                       - prod-mxcfnwvpd6kb4 # Anthropic Claude Sonnet 4.5
                       - prod-xdkflymybwmvi # Anthropic Claude Haiku 4.5
