@@ -320,6 +320,142 @@ Resources:
       Group: customer
 
   # ============================================================
+  # Bedrock model subscription (provision-time, account-wide)
+  #
+  # The agent runs in AgentCore Runtime under a least-privilege
+  # execution role with no aws-marketplace:Subscribe/ViewSubscriptions.
+  # The first invoke of a third-party serverless model (Claude) would
+  # otherwise trigger a Marketplace auto-subscribe using that role and
+  # fail with AccessDeniedException. We subscribe the account here, at
+  # provision time, with a role that DOES have marketplace permissions,
+  # so the model agreement exists before any participant invokes and the
+  # runtime role only needs bedrock:InvokeModel*. Subscription is
+  # account-wide and idempotent.
+  # ============================================================
+
+  ModelSubscribeFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: BedrockModelSubscription
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:GetFoundationModelAvailability
+                  - bedrock:ListFoundationModelAgreementOffers
+                  - bedrock:CreateFoundationModelAgreement
+                  - bedrock:GetUseCaseForModelAccess
+                  - bedrock:PutUseCaseForModelAccess
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - aws-marketplace:ViewSubscriptions
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - aws-marketplace:Subscribe
+                Resource: "*"
+                Condition:
+                  ForAnyValue:StringEquals:
+                    aws-marketplace:ProductId:
+                      - prod-mxcfnwvpd6kb4 # Anthropic Claude Sonnet 4.5
+                      - prod-ffvjxvh4ltq64 # Anthropic Claude Sonnet 4.6
+                      - prod-xdkflymybwmvi # Anthropic Claude Haiku 4.5
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: arn:aws:logs:*:*:*
+
+  ModelSubscribeFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: workshop-bedrock-model-subscribe
+      Runtime: python3.13
+      Architectures:
+        - arm64
+      Handler: index.handler
+      Role: !GetAtt ModelSubscribeFunctionRole.Arn
+      Timeout: 300
+      Environment:
+        Variables:
+          # Base foundation-model IDs to subscribe (region = stack region).
+          MODEL_IDS: "anthropic.claude-sonnet-4-5-20250929-v1:0,anthropic.claude-haiku-4-5-20251001-v1:0,anthropic.claude-sonnet-4-6"
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+          import os
+          import time
+
+          MODELS = [m.strip() for m in os.environ.get('MODEL_IDS', '').split(',') if m.strip()]
+
+          def ensure(client, model_id):
+              avail = client.get_foundation_model_availability(modelId=model_id)
+              if avail.get('agreementAvailability', {}).get('status') == 'AVAILABLE':
+                  return 'already-available'
+              offers = client.list_foundation_model_agreement_offers(modelId=model_id).get('offers', [])
+              if not offers:
+                  return 'no-offer-skipped'
+              client.create_foundation_model_agreement(
+                  modelId=model_id, offerToken=offers[0]['offerToken'])
+              return 'agreement-created'
+
+          def handler(event, context):
+              if event['RequestType'] == 'Delete':
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+                  return
+              results = {}
+              try:
+                  client = boto3.client('bedrock')
+                  for m in MODELS:
+                      try:
+                          results[m] = ensure(client, m)
+                      except Exception as e:
+                          results[m] = 'error: ' + str(e)
+                  # Poll until agreements finish activating (bounded by timeout).
+                  deadline = time.time() + 200
+                  pending = list(MODELS)
+                  while pending and time.time() < deadline:
+                      still = []
+                      for m in pending:
+                          try:
+                              st = client.get_foundation_model_availability(
+                                  modelId=m).get('agreementAvailability', {}).get('status')
+                              if st != 'AVAILABLE':
+                                  still.append(m)
+                          except Exception:
+                              pass
+                      pending = still
+                      if pending:
+                          time.sleep(15)
+                  results['pending'] = ','.join(pending) if pending else 'none'
+                  print('model subscription results:', results)
+              except Exception as e:
+                  # Do not block account provisioning on a subscription hiccup;
+                  # the devbox pre-subscribe and first-invoke remain as fallbacks.
+                  results['fatal'] = str(e)
+                  print('model subscription fatal error:', e)
+              cfnresponse.send(event, context, cfnresponse.SUCCESS, results)
+
+  BedrockModelSubscription:
+    Type: Custom::BedrockModelSubscription
+    Properties:
+      ServiceToken: !GetAtt ModelSubscribeFunction.Arn
+      # Bump this value to force the subscription check to re-run on stack update.
+      Version: '1'
+
+  # ============================================================
   # Portfolio Risk Check Lambda Function (used in Lab 2 — Gateway)
   # ============================================================
 
