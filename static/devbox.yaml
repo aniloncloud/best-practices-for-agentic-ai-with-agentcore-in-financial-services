@@ -1648,6 +1648,24 @@ Resources:
                 Resource: "*"
               - Effect: Allow
                 Action:
+                  # First invocation of an Anthropic model auto-subscribes via
+                  # AWS Marketplace using the caller's permissions; without this
+                  # the invoke fails with AccessDeniedException naming
+                  # aws-marketplace:ViewSubscriptions / Subscribe
+                  - aws-marketplace:ViewSubscriptions
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - aws-marketplace:Subscribe
+                Resource: "*"
+                Condition:
+                  StringEquals:
+                    aws-marketplace:ProductId:
+                      - prod-mxcfnwvpd6kb4 # Anthropic Claude Sonnet 4.5
+                      - prod-xdkflymybwmvi # Anthropic Claude Haiku 4.5
+                      - prod-ffvjxvh4ltq64 # Anthropic Claude Sonnet 4.6
+              - Effect: Allow
+                Action:
                   - cognito-idp:*
                   - cognito-identity:*
                 Resource: "*"

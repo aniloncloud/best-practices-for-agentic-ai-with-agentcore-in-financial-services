@@ -25,7 +25,7 @@ Instructions for running the AgentCore CLI Workshop in your own AWS account.
 ### AWS account
 
 - An AWS account with permissions to create IAM roles, Lambda functions, CloudFormation stacks, and AgentCore resources
-- Amazon Bedrock model access. As of October 2025, AWS enables all serverless foundation models (including Claude Sonnet 4.5) by default in commercial regions, so no manual model-access step is required. If you are on an older account where a model isn't already enabled, make sure your IAM principal includes `aws-marketplace:ViewSubscriptions` (included in the policy below) so the first invocation can complete the automatic subscription check.
+- Amazon Bedrock model access. As of October 2025, AWS enables all serverless foundation models (including Claude Sonnet 4.5) by default in commercial regions, so no manual model-access step is required. However, the **first invocation** of an Anthropic model in an account triggers an automatic AWS Marketplace subscription using the calling principal's permissions — that principal needs both `aws-marketplace:ViewSubscriptions` and `aws-marketplace:Subscribe` (both included in the policy below). Without them the first invoke fails with `AccessDeniedException: ... not authorized to perform the required AWS Marketplace actions`. The subscription can take a couple of minutes to finalize; if you hit the error right after fixing permissions, retry after 2 minutes.
 
 ## Setup
 
@@ -242,6 +242,23 @@ Your IAM user or role needs the following permissions. You can create a custom p
                 "aws-marketplace:ViewSubscriptions"
             ],
             "Resource": "*"
+        },
+        {
+            "Sid": "BedrockModelAutoSubscribe",
+            "Effect": "Allow",
+            "Action": [
+                "aws-marketplace:Subscribe"
+            ],
+            "Resource": "*",
+            "Condition": {
+                "StringEquals": {
+                    "aws-marketplace:ProductId": [
+                        "prod-mxcfnwvpd6kb4",
+                        "prod-xdkflymybwmvi",
+                        "prod-ffvjxvh4ltq64"
+                    ]
+                }
+            }
         },
         {
             "Sid": "ECRAccess",
