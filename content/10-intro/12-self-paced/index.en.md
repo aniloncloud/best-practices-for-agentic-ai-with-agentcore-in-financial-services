@@ -29,16 +29,16 @@ Instructions for running the AgentCore CLI Workshop in your own AWS account.
 
 ## Setup
 
-### 1. Install Node.js 20.x or later
+### 1. Install Node.js 22.x or later
 
-Download from https://nodejs.org/ or use a version manager:
+Download from https://nodejs.org/ or use a version manager. Node 22 (LTS) is recommended: the AWS SDK for JavaScript v3 used by the AgentCore CLI requires Node >= 22 for releases after early January 2027.
 
 ::::tabs{variant="container" groupId="os"}
 :::tab{label="macOS/Linux"}
 ```bash
 # Using nvm
-nvm install 20
-nvm use 20
+nvm install 22
+nvm use 22
 
 # Verify
 node --version
@@ -47,8 +47,8 @@ node --version
 :::tab{label="Windows"}
 ```powershell
 # Using nvm-windows (https://github.com/coreybutler/nvm-windows)
-nvm install 20
-nvm use 20
+nvm install 22
+nvm use 22
 
 # Verify
 node --version
@@ -254,8 +254,8 @@ Your IAM user or role needs the following permissions. You can create a custom p
                 "ForAnyValue:StringEquals": {
                     "aws-marketplace:ProductId": [
                         "prod-mxcfnwvpd6kb4",
-                        "prod-xdkflymybwmvi",
-                        "prod-ffvjxvh4ltq64"
+                        "prod-ffvjxvh4ltq64",
+                        "prod-xdkflymybwmvi"
                     ]
                 }
             }

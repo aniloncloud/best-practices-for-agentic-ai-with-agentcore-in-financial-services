@@ -1444,6 +1444,40 @@ Resources:
           # ============================================================
           echo "INFO: Starting workshop-specific setup..."
 
+          # Pre-subscribe third-party Bedrock models (account-wide, one-time).
+          # First invoke of a third-party serverless model otherwise triggers a
+          # Marketplace auto-subscribe using the *calling* role's permissions,
+          # which fails for least-privilege roles (e.g. the AgentCore runtime
+          # execution role) with AccessDeniedException naming
+          # aws-marketplace:ViewSubscriptions/Subscribe. Amazon first-party
+          # models (Nova, Titan) have no Marketplace offer and are skipped, so
+          # extra model IDs can be appended to the nohup line safely.
+          # Runs in background so it adds no time to instance boot.
+          cat > /usr/local/bin/bedrock-presubscribe.sh <<'SCRIPT'
+          #!/bin/bash
+          REGION=$1; shift
+          for MODEL_ID in "$@"; do
+            STATUS=$(aws bedrock get-foundation-model-availability --model-id "$MODEL_ID" --region "$REGION" --query agreementAvailability.status --output text 2>/dev/null)
+            if [ "$STATUS" = "AVAILABLE" ]; then echo "$MODEL_ID: already subscribed"; continue; fi
+            TOKEN=$(aws bedrock list-foundation-model-agreement-offers --model-id "$MODEL_ID" --region "$REGION" --query 'offers[0].offerToken' --output text 2>/dev/null)
+            if [ -z "$TOKEN" ] || [ "$TOKEN" = "None" ]; then echo "$MODEL_ID: no marketplace offer (first-party model?), skipping"; continue; fi
+            aws bedrock create-foundation-model-agreement --model-id "$MODEL_ID" --offer-token "$TOKEN" --region "$REGION" && echo "$MODEL_ID: agreement created"
+          done
+          # Wait until agreements finish activating (took ~60s in testing)
+          for i in $(seq 1 40); do
+            PENDING=""
+            for MODEL_ID in "$@"; do
+              STATUS=$(aws bedrock get-foundation-model-availability --model-id "$MODEL_ID" --region "$REGION" --query agreementAvailability.status --output text 2>/dev/null)
+              [ "$STATUS" != "AVAILABLE" ] && PENDING="$PENDING $MODEL_ID"
+            done
+            [ -z "$PENDING" ] && { echo "all model subscriptions active"; exit 0; }
+            echo "waiting for:$PENDING"; sleep 15
+          done
+          echo "WARN: subscriptions still pending after wait:$PENDING"
+          SCRIPT
+          chmod +x /usr/local/bin/bedrock-presubscribe.sh
+          nohup /usr/local/bin/bedrock-presubscribe.sh ${AWS::Region} "anthropic.claude-sonnet-4-5-20250929-v1:0" "anthropic.claude-sonnet-4-6" "anthropic.claude-haiku-4-5-20251001-v1:0" > /var/log/bedrock-presubscribe.log 2>&1 &
+
           # Install Python 3.11 and Docker
           dnf install -y python3.11 python3.11-pip docker || true
           systemctl enable docker && systemctl start docker
@@ -1454,9 +1488,13 @@ Resources:
           su - ec2-user -c "source /home/ec2-user/workspace/my-workspace/venv/bin/activate && pip install --upgrade pip && pip install 'bedrock-agentcore>=1.0.3' 'strands-agents>=1.13.0' 'mcp>=1.19.0' 'botocore[crt]>=1.35.0' 'aws-opentelemetry-distro' boto3 requests"
 
           # Install nvm
+          # Node 22 (LTS): the AWS SDK for JavaScript v3 (used by the agentcore
+          # CLI) drops support for Node < 22 for releases after early Jan 2027,
+          # which otherwise prints a NodeVersionSupportWarning on every command.
           su - ec2-user -c "curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.4/install.sh | bash"
-          su - ec2-user -c "nvm install 20"
-          su - ec2-user -c "nvm use 20" 
+          su - ec2-user -c "nvm install 22"
+          su - ec2-user -c "nvm use 22"
+          su - ec2-user -c "nvm alias default 22"
           
           # Install agentcore CLI and CDK dependencies
           su - ec2-user -c "npm install -g @aws/agentcore"
@@ -1660,12 +1698,13 @@ Resources:
                 Resource: "*"
                 Condition:
                   # aws-marketplace:ProductId is a multi-valued context key;
-                  # Access Analyzer requires the ForAnyValue qualifier
+                  # Access Analyzer requires the ForAnyValue qualifier.
+                  # Scoped to the models the workshop uses.
                   ForAnyValue:StringEquals:
                     aws-marketplace:ProductId:
                       - prod-mxcfnwvpd6kb4 # Anthropic Claude Sonnet 4.5
-                      - prod-xdkflymybwmvi # Anthropic Claude Haiku 4.5
                       - prod-ffvjxvh4ltq64 # Anthropic Claude Sonnet 4.6
+                      - prod-xdkflymybwmvi # Anthropic Claude Haiku 4.5
               - Effect: Allow
                 Action:
                   - cognito-idp:*

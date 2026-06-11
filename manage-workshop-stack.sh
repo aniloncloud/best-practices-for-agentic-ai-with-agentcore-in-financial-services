@@ -11,7 +11,7 @@ if [[ "$STACK_OPERATION" == "create" || "$STACK_OPERATION" == "update" ]]; then
     echo "INFO: Bootstrapping CDK in account ${AWS_ACCOUNT_ID}, region ${AWS_REGION}"
 
     # Install Node.js and CDK
-    curl -fsSL https://rpm.nodesource.com/setup_20.x | bash -
+    curl -fsSL https://rpm.nodesource.com/setup_22.x | bash -
     yum install -y nodejs || true
     npm install -g aws-cdk
 
