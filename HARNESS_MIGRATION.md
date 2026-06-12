@@ -209,3 +209,44 @@ These are authoritative — they call the live `create_harness`/`invoke_harness`
   `describe-user-pool-client`; the workshop's M2M client must expose `client_credentials` + scope).
 - Model: harness default `global.anthropic.claude-sonnet-4-6` vs. prereqs "Sonnet 4.5".
 - Full end-to-end timing + the before/after trade, in a Workshop Studio dry-run.
+
+---
+
+## Pre-provisioning implemented (2026-06-11) — variance reduction
+
+Added to `static/prereqs.yaml` so the live labs hit fewer failure points (YAML parses;
+8 new resources confirmed present). Each trades a bit of "watch it being created" for
+much lower variance in a no-facilitator room; the setup commands are shown in the labs
+as reference one-liners.
+
+- **`HarnessExecutionRole`** (`workshop-harness-execution-role`) — full harness runtime
+  policy (Bedrock, InvokeGateway, OAuth2 token vault + secret, workload identity, ECR
+  Public, logs, X-Ray, CW metrics). ARN → SSM `harness_execution_role_arn`.
+- **`GatewayServiceRole`** (`workshop-gateway-service-role`) — `lambda:InvokeFunction` on
+  both targets **+ policy-engine authorization perms** so the Lab 3 attachment succeeds
+  without the manual workaround. ARN → SSM `gateway_service_role_arn`. Lab 2 passes it via
+  `agentcore add gateway --role-arn`.
+- **`GatewayM2MCredentialProvider`** — OAuth2 (M2M) credential provider created by a
+  Lambda-backed custom resource (`CredentialProviderFunction`), reading the M2M client
+  secret via `!GetAtt MachineUserPoolClient.ClientSecret`. ARN → SSM
+  `gateway_m2m_credential_provider_arn`. Lab 2 Step 4 now just references the ARN
+  (the fragile live `describe-user-pool-client` secret step is gone); Step 5 attaches
+  with `--credential-arn $GATEWAY_M2M_CRED_ARN`.
+
+Lab 2 env block now loads the three new SSM params. Lab 1/intro/facilitator updated to
+list the pre-provisioned harness IAM + credential provider. The Lab 3 policy-engine
+"not attached" troubleshooting expander is now a true fallback (the gateway role has the
+perms up front).
+
+### NEW verification items (need the stack deploy + GA CLI dry-run)
+- [ ] Deploy `prereqs.yaml` in a test account — confirm the custom resource's boto3 call
+      (`create_oauth2_credential_provider`, vendor `CustomOauth2`, `customOauth2ProviderConfig`)
+      succeeds and CFN gets `CredentialProviderArn` back. (API shape mirrors the official
+      07-oauth sample's `setup_helpers.create_credential_provider`.)
+- [ ] Confirm `agentcore add gateway --role-arn` and `agentcore add tool --outbound-auth
+      oauth --credential-arn ... --scopes ...` are the real GA CLI flags (the samples use the
+      boto3 API for these; the CLI surface is the remaining unknown).
+- [ ] Confirm how `agentcore deploy` consumes the pre-created harness execution role
+      (flag, `aws-targets.json`, or `harness.json`) — wire `HARNESS_EXEC_ROLE_ARN` accordingly.
+- [ ] `MachineUserPoolClient` must allow `client_credentials` with the gateway scope for the
+      M2M token to mint (verify its `AllowedOAuthFlows`/scopes in prereqs.yaml).

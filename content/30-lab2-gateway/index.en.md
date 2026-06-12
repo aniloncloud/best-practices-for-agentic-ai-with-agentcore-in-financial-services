@@ -56,6 +56,9 @@ export COGNITO_DOMAIN=$(aws ssm get-parameter --name $P/cognito_domain --query '
 export COGNITO_SCOPE=$(aws ssm get-parameter --name $P/cognito_auth_scope --query 'Parameter.Value' --output text)
 export RISK_LAMBDA_ARN=$(aws ssm get-parameter --name $P/portfolio_risk_lambda_arn --query 'Parameter.Value' --output text)
 export TRADE_LAMBDA_ARN=$(aws ssm get-parameter --name $P/execute_trade_lambda_arn --query 'Parameter.Value' --output text)
+export HARNESS_EXEC_ROLE_ARN=$(aws ssm get-parameter --name $P/harness_execution_role_arn --query 'Parameter.Value' --output text)
+export GATEWAY_ROLE_ARN=$(aws ssm get-parameter --name $P/gateway_service_role_arn --query 'Parameter.Value' --output text)
+export GATEWAY_M2M_CRED_ARN=$(aws ssm get-parameter --name $P/gateway_m2m_credential_provider_arn --query 'Parameter.Value' --output text)
 EOF
 source ~/portfolio-env.sh
 echo "Cognito client: $COGNITO_CLIENT_ID"
@@ -71,6 +74,7 @@ Run `source ~/portfolio-env.sh` again. Labs 2 and 3 both rely on these variables
 
 ```bash
 agentcore add gateway --name my-gateway \
+  --role-arn $GATEWAY_ROLE_ARN \
   --authorizer-type CUSTOM_JWT \
   --discovery-url $COGNITO_DISCOVERY_URL \
   --allowed-clients $COGNITO_CLIENT_ID \
@@ -83,7 +87,7 @@ You should see:
 Added gateway 'my-gateway'
 :::
 
-`--discovery-url` tells the Gateway where to fetch Cognito's signing keys (the OIDC `/.well-known/openid-configuration` endpoint). The Gateway is reached by the **harness using a machine-to-machine (M2M) token**, so `--allowed-clients` is the M2M app client and `--allowed-scopes` is the gateway scope — tokens for any other client or scope are rejected outright.
+`--role-arn` is the **pre-provisioned** gateway service role — it already has permission to invoke the Lambda targets *and* to call the policy engine you attach in Lab 3, so the governance step works without any manual IAM fix. `--discovery-url` tells the Gateway where to fetch Cognito's signing keys. The Gateway is reached by the **harness using a machine-to-machine (M2M) token**, so `--allowed-clients` is the M2M app client and `--allowed-scopes` is the gateway scope.
 
 In production you would never create a gateway unauthenticated even temporarily. We don't here either.
 
@@ -117,32 +121,21 @@ The Lambda functions themselves are unchanged — the Gateway MCPifies them, mak
 
 ---
 
-## Step 4: Register an Outbound Credential Provider (M2M)
+## Step 4: Your Outbound Credential Provider (pre-provisioned)
 
-The harness calls the Gateway as a machine, using a Cognito M2M (client-credentials) token. Register that credential once in **AgentCore Identity** so the harness can fetch and refresh the token automatically — the secret lives in the Token Vault, never in your config or code:
-
-```bash
-agentcore add credential \
-  --name my-gateway-m2m \
-  --type oauth \
-  --discovery-url $COGNITO_DISCOVERY_URL \
-  --client-id $COGNITO_CLIENT_ID \
-  --client-secret "$(aws cognito-idp describe-user-pool-client --user-pool-id $COGNITO_POOL_ID --client-id $COGNITO_CLIENT_ID --query 'UserPoolClient.ClientSecret' --output text)"
-```
-
-This creates an OAuth2 credential provider. You'll reference its ARN when you attach the Gateway tool in the next step.
+The harness calls the Gateway as a machine, using a Cognito M2M (client-credentials) token. The OAuth2 **credential provider** for this is **pre-provisioned** in AgentCore Identity — the client secret lives in the Token Vault, never in your config or code. Its ARN is already loaded as `$GATEWAY_M2M_CRED_ARN`:
 
 ```bash
-CRED_ARN=$(aws bedrock-agentcore-control get-oauth2-credential-provider \
-  --name my-gateway-m2m --query 'credentialProviderArn' --output text)
-echo "Credential provider: $CRED_ARN"
+echo "Credential provider: $GATEWAY_M2M_CRED_ARN"
 ```
+
+You'll reference this ARN when you attach the Gateway tool in the next step. (Setup-time command, shown for reference — you don't run it: `agentcore add credential --name my-gateway-m2m --type oauth --discovery-url ... --client-id ... --client-secret ...`.)
 
 ---
 
 ## Step 5: Attach the Gateway to the Harness (with outbound M2M auth)
 
-The harness gains the Gateway's tools by referencing the gateway — no MCP client code, no wiring. The `outbound-auth` flags tell the harness to authenticate to the Gateway with the M2M credential from Step 4:
+The harness gains the Gateway's tools by referencing the gateway — no MCP client code, no wiring. The `outbound-auth` flags tell the harness to authenticate to the Gateway with the pre-provisioned M2M credential:
 
 ```bash
 agentcore add tool --harness PortfolioAdvisor \
@@ -150,7 +143,7 @@ agentcore add tool --harness PortfolioAdvisor \
   --name my-gateway \
   --gateway my-gateway \
   --outbound-auth oauth \
-  --credential-arn $CRED_ARN \
+  --credential-arn $GATEWAY_M2M_CRED_ARN \
   --scopes $COGNITO_SCOPE
 ```
 
