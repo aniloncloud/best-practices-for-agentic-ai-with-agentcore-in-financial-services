@@ -121,7 +121,7 @@ PortfolioAdvisor/
 
 There is no `main.py`, no orchestration loop, and no MCP client code to maintain. That code is what the managed harness runs for you.
 
-> **How this was scaffolded:** this project was created once with `agentcore create --name PortfolioAdvisor --model-provider bedrock` (which generates `harness.json`); we added the system prompt and reference data. Your harness **execution role** and the **outbound credential provider** for Lab 2 are pre-provisioned in your account, so `agentcore deploy` just works.
+> **How this was scaffolded:** this project was created once with `agentcore create --name PortfolioAdvisor --model-provider bedrock` (which generates `harness.json`); we added the system prompt and reference data. Your harness **execution role** is pre-provisioned in your account, so `agentcore deploy` just works. (You'll create the outbound credential provider for the Gateway yourself in Lab 2.)
 
 ::::
 

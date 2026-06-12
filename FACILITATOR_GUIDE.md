@@ -36,7 +36,7 @@ The following resources are provisioned before participants arrive. Participants
 | Agent workspace | `~/PortfolioAdvisor/` — declarative harness project (`harness.json` + tool schemas), CLI installed |
 | Cognito User Pool | M2M client (client_credentials flow), web client (auth code flow), test user `workshopuser@example.com` / `WorkshopPass1!` |
 | Lambda functions | `workshop-check-portfolio-risk`, `workshop-execute-trade` |
-| AgentCore harness IAM | `workshop-harness-execution-role`, `workshop-gateway-service-role` (Lambda invoke + policy-engine attach perms), and an OAuth2 M2M credential provider `my-gateway-m2m` — ARNs in SSM under `/app/portfolioadvisor/agentcore/` |
+| AgentCore harness IAM | `workshop-harness-execution-role`, `workshop-gateway-service-role` (Lambda invoke + policy-engine attach perms) — ARNs in SSM under `/app/portfolioadvisor/agentcore/`. The OAuth2 M2M credential provider `my-gateway-m2m` is **not** pre-provisioned; participants create it in Lab 2 Step 4 with one `agentcore add credential` command (no native CloudFormation type exists for it). |
 | VPC | Private subnets, NAT Gateway, VPC endpoints for AgentCore, Bedrock, SSM, CloudWatch, S3, DynamoDB |
 | SSM Parameter Store | Parameters under `/app/portfolioadvisor/agentcore/` (Lambda ARNs, Cognito config, VPC resource IDs) |
 | CloudWatch | GenAI Observability enabled and dashboard pre-configured |

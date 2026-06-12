@@ -58,7 +58,6 @@ export RISK_LAMBDA_ARN=$(aws ssm get-parameter --name $P/portfolio_risk_lambda_a
 export TRADE_LAMBDA_ARN=$(aws ssm get-parameter --name $P/execute_trade_lambda_arn --query 'Parameter.Value' --output text)
 export HARNESS_EXEC_ROLE_ARN=$(aws ssm get-parameter --name $P/harness_execution_role_arn --query 'Parameter.Value' --output text)
 export GATEWAY_ROLE_ARN=$(aws ssm get-parameter --name $P/gateway_service_role_arn --query 'Parameter.Value' --output text)
-export GATEWAY_M2M_CRED_ARN=$(aws ssm get-parameter --name $P/gateway_m2m_credential_provider_arn --query 'Parameter.Value' --output text)
 EOF
 source ~/portfolio-env.sh
 echo "Cognito client: $COGNITO_CLIENT_ID"
@@ -121,21 +120,41 @@ The Lambda functions themselves are unchanged — the Gateway MCPifies them, mak
 
 ---
 
-## Step 4: Your Outbound Credential Provider (pre-provisioned)
+## Step 4: Create the Outbound Credential Provider
 
-The harness calls the Gateway as a machine, using a Cognito M2M (client-credentials) token. The OAuth2 **credential provider** for this is **pre-provisioned** in AgentCore Identity — the client secret lives in the Token Vault, never in your config or code. Its ARN is already loaded as `$GATEWAY_M2M_CRED_ARN`:
+The harness calls the Gateway as a machine, using a Cognito M2M (client-credentials) token. You register an OAuth2 **credential provider** in AgentCore Identity so the harness can fetch that token for you — the client secret goes into the Token Vault and never lives in your config or agent code.
+
+The Cognito M2M app client (and its secret) is already provisioned in your account. Read the secret and create the provider:
 
 ```bash
+export M2M_CLIENT_SECRET=$(aws cognito-idp describe-user-pool-client \
+  --user-pool-id "$COGNITO_POOL_ID" \
+  --client-id "$COGNITO_CLIENT_ID" \
+  --query 'UserPoolClient.ClientSecret' --output text)
+
+agentcore add credential --name my-gateway-m2m --type oauth \
+  --discovery-url "$COGNITO_DISCOVERY_URL" \
+  --client-id "$COGNITO_CLIENT_ID" \
+  --client-secret "$M2M_CLIENT_SECRET" \
+  --scopes "$COGNITO_SCOPE"
+```
+
+This stores the secret in the AgentCore Token Vault. Now capture the provider ARN for the next step (its name is fixed, so the ARN is deterministic):
+
+```bash
+REGION=${AWS_REGION:-${AWS_DEFAULT_REGION:-$(aws configure get region)}}
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+export GATEWAY_M2M_CRED_ARN="arn:aws:bedrock-agentcore:${REGION}:${ACCOUNT_ID}:token-vault/default/oauth2credentialprovider/my-gateway-m2m"
 echo "Credential provider: $GATEWAY_M2M_CRED_ARN"
 ```
 
-You'll reference this ARN when you attach the Gateway tool in the next step. (Setup-time command, shown for reference — you don't run it: `agentcore add credential --name my-gateway-m2m --type oauth --discovery-url ... --client-id ... --client-secret ...`.)
+Notice you never pasted the secret into the agent or `harness.json` — it went straight from Cognito into the Token Vault.
 
 ---
 
 ## Step 5: Attach the Gateway to the Harness (with outbound M2M auth)
 
-The harness gains the Gateway's tools by referencing the gateway — no MCP client code, no wiring. The `outbound-auth` flags tell the harness to authenticate to the Gateway with the pre-provisioned M2M credential:
+The harness gains the Gateway's tools by referencing the gateway — no MCP client code, no wiring. The `outbound-auth` flags tell the harness to authenticate to the Gateway with the M2M credential you just created:
 
 ```bash
 agentcore add tool --harness PortfolioAdvisor \

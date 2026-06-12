@@ -226,12 +226,19 @@ as reference one-liners.
   both targets **+ policy-engine authorization perms** so the Lab 3 attachment succeeds
   without the manual workaround. ARN → SSM `gateway_service_role_arn`. Lab 2 passes it via
   `agentcore add gateway --role-arn`.
-- **`GatewayM2MCredentialProvider`** — OAuth2 (M2M) credential provider created by a
-  Lambda-backed custom resource (`CredentialProviderFunction`), reading the M2M client
-  secret via `!GetAtt MachineUserPoolClient.ClientSecret`. ARN → SSM
-  `gateway_m2m_credential_provider_arn`. Lab 2 Step 4 now just references the ARN
-  (the fragile live `describe-user-pool-client` secret step is gone); Step 5 attaches
-  with `--credential-arn $GATEWAY_M2M_CRED_ARN`.
+- **`GatewayM2MCredentialProvider`** — ~~OAuth2 (M2M) credential provider created by a
+  Lambda-backed custom resource~~ **REMOVED (2026-06-12).** The custom resource failed
+  deterministically: the Lambda runtime's bundled boto3 is too old to know the
+  `bedrock-agentcore-control` service, so the client call raised before `cfnresponse.send`
+  and CloudFormation hung, then failed the stack with "did not receive a response." There
+  is no native CloudFormation type for this resource. Rather than ship a fragile custom
+  resource, the provider is now created in **Lab 2 Step 4** with one
+  `agentcore add credential` command (the attendee environment ships a current boto3).
+  The lab reads the M2M client secret live from Cognito (`describe-user-pool-client`) and
+  derives the provider ARN deterministically
+  (`...:token-vault/default/oauth2credentialprovider/my-gateway-m2m`). The SSM param
+  `gateway_m2m_credential_provider_arn` and the `CredentialProviderFunction`/role were
+  deleted from `prereqs.yaml`.
 
 Lab 2 env block now loads the three new SSM params. Lab 1/intro/facilitator updated to
 list the pre-provisioned harness IAM + credential provider. The Lab 3 policy-engine

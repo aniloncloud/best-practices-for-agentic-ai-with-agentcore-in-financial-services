@@ -908,99 +908,8 @@ Resources:
                   - bedrock-agentcore:GetPolicyEngine
                 Resource: '*'
 
-  # OAuth2 (M2M client-credentials) credential provider in AgentCore Identity.
-  # Pre-created so Lab 2 references its ARN instead of fishing the client secret
-  # out of Cognito live. Created via a Lambda-backed custom resource because there
-  # is no native CloudFormation type for it.
-  CredentialProviderFunctionRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: lambda.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: CredentialProviderManagement
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - bedrock-agentcore:CreateOauth2CredentialProvider
-                  - bedrock-agentcore:DeleteOauth2CredentialProvider
-                  - bedrock-agentcore:GetOauth2CredentialProvider
-                Resource: '*'
-              - Effect: Allow
-                Action:
-                  - logs:CreateLogGroup
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
-                Resource: arn:aws:logs:*:*:*
-
-  CredentialProviderFunction:
-    Type: AWS::Lambda::Function
-    Properties:
-      FunctionName: workshop-create-credential-provider
-      Handler: index.lambda_handler
-      Runtime: python3.12
-      Timeout: 60
-      Role: !GetAtt CredentialProviderFunctionRole.Arn
-      Code:
-        ZipFile: |
-          import boto3, cfnresponse
-
-          NAME = "my-gateway-m2m"
-
-          def lambda_handler(event, context):
-              rt = event["RequestType"]
-              props = event.get("ResourceProperties", {})
-              region = props.get("Region")
-              ac = boto3.client("bedrock-agentcore-control", region_name=region)
-              try:
-                  if rt == "Delete":
-                      try:
-                          ac.delete_oauth2_credential_provider(name=NAME)
-                      except Exception as e:
-                          print(f"delete (ignored): {e}")
-                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
-                      return
-                  # Create / Update — idempotent
-                  try:
-                      existing = ac.get_oauth2_credential_provider(name=NAME)
-                      arn = existing["credentialProviderArn"]
-                  except Exception:
-                      resp = ac.create_oauth2_credential_provider(
-                          name=NAME,
-                          credentialProviderVendor="CustomOauth2",
-                          oauth2ProviderConfigInput={
-                              "customOauth2ProviderConfig": {
-                                  "oauthDiscovery": {"discoveryUrl": props["DiscoveryUrl"]},
-                                  "clientId": props["ClientId"],
-                                  "clientSecret": props["ClientSecret"],
-                              }
-                          },
-                      )
-                      arn = resp["credentialProviderArn"]
-                  cfnresponse.send(event, context, cfnresponse.SUCCESS,
-                                   {"CredentialProviderArn": arn}, physicalResourceId=NAME)
-              except Exception as e:
-                  print(f"error: {e}")
-                  cfnresponse.send(event, context, cfnresponse.FAILED, {"Error": str(e)})
-
-  GatewayM2MCredentialProvider:
-    Type: Custom::OAuth2CredentialProvider
-    DependsOn:
-      - MachineUserPoolClient
-      - UserPool
-    Properties:
-      ServiceToken: !GetAtt CredentialProviderFunction.Arn
-      Region: !Ref AWS::Region
-      DiscoveryUrl: !Sub 'https://cognito-idp.${AWS::Region}.amazonaws.com/${UserPool}/.well-known/openid-configuration'
-      ClientId: !Ref MachineUserPoolClient
-      ClientSecret: !GetAtt MachineUserPoolClient.ClientSecret
+  # The OAuth2 (M2M) credential provider is created in Lab 2 (Step 4), not here:
+  # there is no native CloudFormation type for it. See HARNESS_MIGRATION.md.
 
   # ── SSM parameters for the pre-created harness resources (consumed in Labs 1–3) ──
 
@@ -1021,16 +930,6 @@ Resources:
       Type: String
       Value: !GetAtt GatewayServiceRole.Arn
       Description: Gateway service role ARN (Lambda invoke + policy-engine attach)
-      Tags:
-        Application: PortfolioAdvisor
-
-  GatewayM2MCredentialProviderArnParameter:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: /app/portfolioadvisor/agentcore/gateway_m2m_credential_provider_arn
-      Type: String
-      Value: !GetAtt GatewayM2MCredentialProvider.CredentialProviderArn
-      Description: OAuth2 (M2M) credential provider ARN for outbound gateway auth
       Tags:
         Application: PortfolioAdvisor
 

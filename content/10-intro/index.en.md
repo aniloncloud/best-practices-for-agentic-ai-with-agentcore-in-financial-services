@@ -17,7 +17,7 @@ Your Workshop Studio environment comes **fully pre-provisioned**. The following 
 | **Agent workspace** | Complete `PortfolioAdvisor/` harness project (`harness.json` + tool schemas), AgentCore CLI pre-installed |
 | **Amazon Cognito** | User Pool with M2M client, web client, and test user (`workshopuser@example.com` / `WorkshopPass1!`) |
 | **Lambda functions** | `workshop-check-portfolio-risk` and `workshop-execute-trade` — ready to be wired through Gateway |
-| **AgentCore harness IAM** | Harness execution role, gateway service role (Lambda invoke + policy-engine attach), and an OAuth2 M2M credential provider — all pre-created so deploys and governance "just work" |
+| **AgentCore harness IAM** | Harness execution role and gateway service role (Lambda invoke + policy-engine attach) — pre-created so deploys and governance "just work" (you create the M2M credential provider yourself in Lab 2) |
 | **VPC** | Two private subnets, NAT Gateway, VPC endpoints for AgentCore, Bedrock Runtime, S3, CloudWatch Logs |
 | **SSM Parameters** | All resource IDs stored under `/app/portfolioadvisor/agentcore/` for easy retrieval |
 | **CloudWatch** | GenAI Observability dashboards pre-configured |
