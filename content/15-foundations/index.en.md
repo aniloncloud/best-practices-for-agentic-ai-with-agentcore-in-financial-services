@@ -43,7 +43,7 @@ Lab 3: Govern Agent Actions with Cedar Policies
       "Cedar policies block oversized trades"  ─────────── Question 2 ✓
       "Every decision is logged for audit"  ──────────────  Question 3 ✓
 
-── SELF-PACED (event stays live after the session) ─────────────────────────
+── SELF-PACED (continue after the session) ─────────────────────────────────
 
 Observability Deep Dive
       Traces, session isolation, token metrics, dashboards  Question 3 (deep) ✓

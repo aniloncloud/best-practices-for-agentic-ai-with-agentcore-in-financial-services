@@ -347,4 +347,4 @@ Gateway → Lambda (via its IAM role)
 
 → Next: [Lab 3: Govern Agent Actions with Cedar Policies](../50-lab4-governance/)
 
-*(Optional: [Enterprise Tool Registry](../35-lab2b-tool-registry/) (self-paced) — tool approval workflow, security review, MCP server registration. ~20 min. Available anytime after this lab.)*
+*(Optional: [Enterprise Tool Registry](../35-lab2b-tool-registry/) (self-paced) — tool approval workflow, security review, MCP server registration. ~20 min. Available after the live session.)*

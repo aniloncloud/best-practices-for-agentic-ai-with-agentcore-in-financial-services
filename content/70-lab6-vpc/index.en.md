@@ -6,16 +6,16 @@ weight: 70
 **⏱️ Estimated time: ~15 minutes**
 
 :::alert{header="Self-paced lab" type="info"}
-Do this after the live session — **your event account stays live**, so you can continue later today. If you're in a new terminal, run `source ~/portfolio-env.sh` to reload your environment variables.
+Do this after the live session — **your event account stays available for a limited time after the Summit**. If you're in a new terminal, run `source ~/portfolio-env.sh` to reload your environment variables.
 
-**Prerequisites:** Labs 1–3 (Deploy to AgentCore Runtime + Connect Tools with Gateway + JWT Auth + Govern Agent Actions with Cedar Policies)
+**Prerequisites:** Lab 1 (a deployed agent). The VPC switch is independent of the Gateway and Cedar policies.
 :::
 
 ## Overview
 
-Your portfolio advisor agent is fully functional — but it's running with public network connectivity. For FSI workloads, regulatory requirements often mandate that agent traffic never traverse the public internet. In this lab, you'll deploy your agent into a VPC so all AWS service calls (Bedrock, AgentCore Gateway, CloudWatch) flow through VPC endpoints rather than the public internet.
+Your portfolio advisor agent is fully functional — but it's running with public network connectivity. For FSI workloads, regulatory requirements often mandate that agent traffic never traverse the public internet. In this lab, you'll move your harness into a VPC so all AWS service calls (Bedrock, AgentCore Gateway, CloudWatch) flow through VPC endpoints rather than the public internet.
 
-Two fields in `agentcore.json`, one redeploy, and your agent is network-isolated.
+A small harness config change, one redeploy, and your agent is network-isolated.
 
 ### What Changes
 
@@ -31,7 +31,7 @@ Two fields in `agentcore.json`, one redeploy, and your agent is network-isolated
 ### What You'll Learn
 
 - Retrieve pre-provisioned VPC resources from SSM Parameter Store
-- Configure VPC network mode with a direct `agentcore.json` edit
+- Configure VPC network mode with a harness config edit
 - Deploy and verify the agent within a VPC
 - Understand which VPC endpoints provide connectivity for each AWS service
 - Roll back to public mode if needed
@@ -42,7 +42,7 @@ Two fields in `agentcore.json`, one redeploy, and your agent is network-isolated
 ┌─────────────────────────────────────────────────────────┐
 │  VPC (private subnets)  ← THIS LAB                      │
 │                                                         │
-│  AgentCore Runtime (PortfolioAdvisor)                   │
+│  AgentCore Harness (PortfolioAdvisor)                   │
 │      │                                                  │
 │      ├──▶ bedrock-runtime VPC endpoint ──▶ Bedrock      │
 │      ├──▶ bedrock-agentcore-gateway endpoint ──▶ Gateway│
@@ -80,29 +80,28 @@ echo "Subnet 2:       $PRIVATE_SUBNET_2"
 echo "Security Group: $SECURITY_GROUP_ID"
 :::
 
-You should see four resource identifiers. Keep them — you'll paste them into `agentcore.json` in the next step.
+You should see four resource identifiers. Keep them — you'll add them to your harness config in the next step.
 
 ## Step 2: Configure VPC Mode
 
-Open `agentcore/agentcore.json`. In the `runtimes` array, find the `"PortfolioAdvisor"` entry and make two changes:
-
-1. Change `"networkMode": "PUBLIC"` to `"networkMode": "VPC"` (or add the field if it isn't present — it defaults to `PUBLIC`)
-2. Add a `networkConfig` block with your subnet IDs and security group ID
-
-The updated runtime entry should include:
+VPC networking is harness configuration. Edit `app/PortfolioAdvisor/harness.json` and add a network configuration block with your private subnets and security group:
 
 :::code{language=json showCopyAction=false}
-"networkMode": "VPC",
-"networkConfig": {
+"networkConfiguration": {
+  "networkMode": "VPC",
   "subnets": ["<PRIVATE_SUBNET_1>", "<PRIVATE_SUBNET_2>"],
   "securityGroups": ["<SECURITY_GROUP_ID>"]
 }
 :::
 
-Replace `<PRIVATE_SUBNET_1>`, `<PRIVATE_SUBNET_2>`, and `<SECURITY_GROUP_ID>` with the actual values printed in Step 1. Leave all other fields — authorizer, gateway, protocol — unchanged.
+Replace the placeholders with the values printed in Step 1. Leave all other fields — model, system prompt, tools, inbound authorizer — unchanged.
 
-:::alert{header="CLI Exception: networkMode and networkConfig" type="warning"}
-The `agentcore` CLI does not expose a `--network-mode` flag. This is one of the few cases where a direct `agentcore.json` edit is required — the same pattern used for `authorizerConfiguration` in Lab 2. All other configuration uses the CLI; only these two fields require a manual JSON edit.
+:::alert{header="Harness VPC flags" type="info"}
+The harness also accepts `--network-mode VPC --subnets ... --security-groups ...` on `agentcore add harness` at creation time. Either way it's configuration — no agent code changes.
+:::
+
+:::alert{header="VPC mode pulls the harness image over NAT" type="warning"}
+In VPC mode the harness pulls its managed container image from Amazon ECR Public, which has no VPC endpoint — so your private subnets need a NAT gateway with internet egress (the workshop VPC already has one). Your agent's traffic to Bedrock, the Gateway, and CloudWatch still flows privately through VPC endpoints; only the one-time image pull uses the NAT path.
 :::
 
 ## Step 3: Deploy
@@ -141,7 +140,7 @@ TOKEN=$(aws cognito-idp initiate-auth \
 
 SESSION_VPC=$(python3 -c 'import uuid; print(uuid.uuid4())')
 
-# Local tool — handled entirely within the runtime
+# Answered from the harness system prompt — no Gateway call
 agentcore invoke "What's the current analysis for AAPL?" \
   --session-id $SESSION_VPC --bearer-token "$TOKEN" --stream
 
@@ -183,9 +182,9 @@ You should see ENIs in both private subnets with `Status: in-use`.
 
 If VPC connectivity issues can't be resolved in the workshop timeframe, revert with one edit:
 
-1. Open `agentcore/agentcore.json`
+1. Open `app/PortfolioAdvisor/harness.json`
 2. Change `"networkMode": "VPC"` back to `"networkMode": "PUBLIC"`
-3. The `networkConfig` block can stay — it is ignored in `PUBLIC` mode
+3. The `networkConfiguration` block can stay — it is ignored in `PUBLIC` mode
 4. Redeploy:
 
 :::code{language=bash}
@@ -199,7 +198,7 @@ After this lab, your agent runs entirely within a private network:
 :::code{language=bash showCopyAction=false}
 Client (with JWT token)
     ↓
-AgentCore Runtime (PortfolioAdvisor) — VPC Mode
+AgentCore Harness (PortfolioAdvisor) — VPC Mode
     ├── Private subnets (no public IP, ENIs attached)
     ├── Model + system prompt (stock/compliance reference data)
     └── Gateway tool (by reference) → AgentCore Gateway ──── via bedrock-agentcore-gateway VPC endpoint
@@ -214,10 +213,10 @@ AWS service traffic (Bedrock, Gateway, CloudWatch, S3)
 
 ## What Just Happened?
 
-Two fields in `agentcore.json` enabled full VPC isolation:
+A small harness config change enabled full VPC isolation:
 
 1. `"networkMode": "VPC"` — tells AgentCore to provision ENIs in your subnets
-2. `"networkConfig"` — specifies which subnets and security group to use
+2. `"networkConfiguration"` — specifies which subnets and security group to use
 
 AgentCore handled ENI provisioning, DNS resolution updates, and VPC endpoint routing automatically. Your agent code, tools, Gateway integration, JWT auth, and Cedar policies all work identically — the only change is the network path.
 
@@ -226,7 +225,7 @@ AgentCore handled ENI provisioning, DNS resolution updates, and VPC endpoint rou
 ## Best Practices: Network Isolation
 
 :::alert{header="Best Practice" type="info"}
-**VPC isolation is a configuration change, not an architecture overhaul.** Two fields in `agentcore.json` move your agent from public internet to private subnets.
+**VPC isolation is a configuration change, not an architecture overhaul.** A small harness config change moves your agent from public internet to private subnets.
 :::
 
 **When to use VPC mode:**

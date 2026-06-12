@@ -52,9 +52,9 @@ In this hands-on workshop, you'll deploy a **Portfolio Advisor Agent** for a cap
 | [Lab 3](./50-lab4-governance/) | Govern Agent Actions with Cedar Policies | ~16 min | Cedar policies deny a 5,000-share trade that succeeded in Lab 2 |
 | Buffer | Finish up / questions | ~8 min | Fast finishers: try the restricted-ticker Cedar policy extension |
 
-### Self-Paced (after the session — your event stays live)
+### Self-Paced (continue after the session)
 
-The account stays active after the session ends. Come back and continue whenever you like.
+Your event account stays available for a limited time after the Summit, so you can continue then.
 
 | Lab | Title | Time | What You'll Do |
 |-----|-------|------|----------------|

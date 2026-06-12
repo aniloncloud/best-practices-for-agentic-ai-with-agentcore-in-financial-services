@@ -356,7 +356,7 @@ Go deeper on machine-to-machine authentication, token exchange with Workload Ide
 
 → [Lab 3 (Self-Paced): OAuth Token Flows](../40-lab3-security/)
 
-**Your event environment stays live after the session ends** — all self-paced labs are available to continue today.
+**Your event account stays available for a limited time after the Summit** — the self-paced labs are available to continue then.
 
 ---
 

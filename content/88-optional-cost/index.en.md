@@ -8,7 +8,7 @@ weight: 88
 **⏱️ Estimated time: ~15 minutes**
 
 :::alert{header="Self-paced lab" type="info"}
-Do this after the live session — **your event account stays live**, so you can continue later today. If you're in a new terminal, run `source ~/portfolio-env.sh` to reload your environment variables.
+Do this after the live session — **your event account stays available for a limited time after the Summit**. If you're in a new terminal, run `source ~/portfolio-env.sh` to reload your environment variables.
 
 **Prerequisites:** Labs 1–3 + Evaluations lab completed (deployed agent with evaluations configured)
 :::

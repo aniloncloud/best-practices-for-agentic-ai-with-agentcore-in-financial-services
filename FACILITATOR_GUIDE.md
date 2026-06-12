@@ -4,7 +4,7 @@
 
 ## Workshop Overview
 
-**Best Practices for Agentic AI with AgentCore in Financial Services** (IND306) teaches participants how to take a fully assembled AI agent and incrementally harden it for financial services production — adding tools, authentication, and governance across three live labs in a **60-minute builder session** at AWS NY Summit. The event stays live after the session ends so participants can continue with self-paced labs at their own pace.
+**Best Practices for Agentic AI with AgentCore in Financial Services** (IND306) teaches participants how to take a fully assembled AI agent and incrementally harden it for financial services production — adding tools, authentication, and governance across three live labs in a **60-minute builder session** at AWS NY Summit. The event account stays available for a limited time after the Summit so participants can continue with the self-paced labs at their own pace.
 
 The workshop follows a single use case from start to finish: a **capital markets portfolio advisor agent** that handles stock analysis, compliance rule lookups, portfolio risk assessment, and trade execution. All financial data is simulated.
 
@@ -127,9 +127,9 @@ The workshop was migrated from a hand-written Strands agent (`main.py` + MCP cli
 
 **Talk-track guidance:** The 8-minute talk should answer the CISO's five questions before participants touch a keyboard. End with the before/after arc: "In Lab 2 you will make a 5,000-share trade succeed. In Lab 3 you will make the exact same trade fail — without touching the agent code." That one sentence motivates the entire session.
 
-### Self-Paced Labs (event stays live after session)
+### Self-Paced Labs (continue after the session)
 
-Participants continue these at their own pace after the 60-minute session ends. The event account remains accessible.
+Participants continue these at their own pace after the 60-minute session ends. The event account remains accessible for a limited time after the Summit.
 
 | Lab | Duration | Topic |
 |-----|----------|-------|

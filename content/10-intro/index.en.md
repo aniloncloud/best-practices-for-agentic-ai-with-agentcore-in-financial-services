@@ -73,7 +73,7 @@ The agent is defined declaratively in `app/PortfolioAdvisor/harness.json` — mo
 | [Lab 3](../50-lab4-governance/) | Govern Agent Actions with Cedar Policies | ~16 min | Cedar policies deny a 5,000-share trade that succeeded in Lab 2 |
 | Buffer | Finish up / questions | ~8 min | Fast finishers: try the restricted-ticker Cedar policy extension |
 
-### Self-Paced (after the session — your event stays live)
+### Self-Paced (continue after the session)
 
 | Lab | Title | Time | What You'll Do |
 |-----|-------|------|----------------|
@@ -86,8 +86,8 @@ The agent is defined declaratively in `app/PortfolioAdvisor/harness.json` — mo
 | [Frontend](../85-optional-frontend/) | Build Client Portal | ~20 min | Flask chat frontend with Cognito login |
 | [Cost Optimization](../88-optional-cost/) | Cost Optimization | ~15 min | Session lifecycle, eval sampling, token monitoring |
 
-:::alert{header="The event stays live after the session" type="info"}
-Everything in the Self-Paced section can be completed later today with this same account. You don't need to rush through any of those labs during the 60-minute live session.
+:::alert{header="Continue after the session" type="info"}
+Everything in the Self-Paced section can be completed after the live session — **your event account stays available for a limited time after the Summit**. You don't need to rush through any of those labs during the 60-minute live session.
 :::
 
 → Next: [Lab 1: Deploy to AgentCore Runtime](../20-lab1-runtime/)

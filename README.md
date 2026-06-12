@@ -1,6 +1,6 @@
 # IND306 — Best Practices for Agentic AI with AgentCore in Financial Services
 
-A hands-on AWS workshop for builders in financial services. Participants take a pre-built capital markets **portfolio advisor agent** — defined as a declarative AgentCore **harness** (no orchestration code) — and incrementally harden it for production: deploying the harness, connecting Lambda tools through an authenticated Gateway, and enforcing deterministic trade controls with Cedar policies. The session runs as a **60-minute builder format** (8-minute facilitator talk, then 52 contiguous minutes of self-paced labs) with three progressive deploys. The event stays live after the session ends so participants can continue with the self-paced labs on their own.
+A hands-on AWS workshop for builders in financial services. Participants take a pre-built capital markets **portfolio advisor agent** — defined as a declarative AgentCore **harness** (no orchestration code) — and incrementally harden it for production: deploying the harness, connecting Lambda tools through an authenticated Gateway, and enforcing deterministic trade controls with Cedar policies. The session runs as a **60-minute builder format** (8-minute facilitator talk, then 52 contiguous minutes of self-paced labs) with three progressive deploys. The event account stays available for a limited time after the Summit so participants can continue with the self-paced labs on their own.
 
 ---
 

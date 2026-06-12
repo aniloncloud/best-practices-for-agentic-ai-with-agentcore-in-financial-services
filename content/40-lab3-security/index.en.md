@@ -6,12 +6,12 @@ weight: 55
 **⏱️ ~20 minutes (self-paced)**
 
 :::alert{header="Self-paced lab" type="info"}
-Do this **after the live session** — your event account stays live. Prerequisites: Labs 1–3. If you're in a new terminal, run `source ~/portfolio-env.sh` first.
+Do this after the live session — **your event account stays available for a limited time after the Summit**. Prerequisites: Labs 1–2. If you're in a new terminal, run `source ~/portfolio-env.sh` first.
 :::
 
 ## Overview
 
-In Lab 2 you secured both the AgentCore Runtime and the Gateway with a Cognito JWT authorizer using the **resource-owner-password** flow — a human user authenticates with a username and password and the resulting token identifies that person in every request.
+In Lab 2 you secured the harness (inbound) and the Gateway with a Cognito JWT authorizer. End users log in with the **resource-owner-password** flow — a human authenticates with a username and password, and that token identifies the person on every call to the agent.
 
 This deep dive covers the **other** half of the OAuth 2.0 picture:
 
@@ -28,7 +28,7 @@ AgentCore Runtime validates standard JWT tokens — it doesn't care which OAuth 
 | **Resource Owner Password** (`USER_PASSWORD_AUTH`) | Human users — interactive login with username/password | Test user: `workshopuser@example.com` |
 | **Client Credentials** (`client_credentials`) | Machine-to-machine — CI pipelines, other agents, batch jobs | M2M client: pre-provisioned |
 
-Both produce a JWT access token. Both work with the same `authorizerConfiguration`. The difference is **who** the token represents — a human user or a service identity.
+Both produce a JWT access token. Both work with the same `authorizerConfiguration`. The difference is **who** the token represents — a human user or a service identity. (In this workshop the harness inbound authorizer allows the web/user client; the M2M client's primary role is *outbound* auth to the Gateway, configured in Lab 2.)
 
 ### What You're Exploring
 
@@ -45,11 +45,11 @@ Both produce a JWT access token. Both work with the same `authorizerConfiguratio
 └──────────────────────────────────────────────────────────────────┘
                         │
                         ▼
-        AgentCore Runtime (my-gateway)  [requires JWT]
+        AgentCore Harness (PortfolioAdvisor)  [validates inbound JWT]
                         │
-                        │ forwards token
+                        │ harness uses its own M2M token (Lab 2 outbound auth)
                         ▼
-        AgentCore Gateway (my-gateway)  [requires JWT]
+        AgentCore Gateway (my-gateway)  [validates M2M JWT]
                         ├── PortfolioRiskCheck → Lambda
                         └── ExecuteTrade → Lambda
 :::
@@ -119,20 +119,24 @@ echo "M2M token obtained successfully"
 Note that `$COGNITO_DOMAIN`, `$COGNITO_SCOPE`, `$COGNITO_POOL_ID`, and `$COGNITO_CLIENT_ID` are all already exported by `~/portfolio-env.sh` — no `aws ssm get-parameter` calls needed here.
 
 :::alert{header="When to use which flow" type="info"}
-Use the **user token** (`$TOKEN`) when you need per-user identity for policies and audit trails. Use the **M2M token** (`$M2M_TOKEN`) for automated pipelines and scheduled jobs that have no human user context. Both are accepted by the same `CUSTOM_JWT` authorizer — the Runtime does not distinguish between them at the token-validation layer. The distinction matters for identity propagation and Cedar policy evaluation downstream.
+Use the **user token** (`$TOKEN`) for human callers; use the **M2M token** (`$M2M_TOKEN`) for automated pipelines and other services. Both are JWTs the harness inbound authorizer can validate (if the client is allowlisted). Note the harness→Gateway hop uses a *separate* M2M credential (Lab 2), so the inbound identity is recorded at the harness — it is not what the Gateway or Cedar evaluates.
 :::
 
 ---
 
 ## Step 4: Invoke the Agent with the M2M Token
 
-The same `agentcore invoke` command that works with a user token also works with an M2M token — the authorizer on `my-gateway` accepts either:
+An M2M token is a valid JWT, but the **harness inbound authorizer in this workshop allows the web/user client** (Lab 2). To invoke the harness directly with the M2M token, add the M2M client to the harness allowlist first:
+
+:::alert{header="Inbound allowlist" type="warning"}
+By default the harness rejects the M2M client *inbound* (it's used for *outbound* Gateway auth). To run the invoke below, add `$COGNITO_CLIENT_ID` to the harness `authorizerConfiguration.allowedClients` and `agentcore deploy`.
+:::
 
 :::code{language=bash}
 SESSION_M2M=$(python3 -c 'import uuid; print(uuid.uuid4())')
 
-agentcore invoke "What are the compliance rules for options trading?" \
-  --session-id $SESSION_M2M --bearer-token "$M2M_TOKEN" --stream
+agentcore invoke --harness PortfolioAdvisor "What are the compliance rules for options trading?" \
+  --session-id $SESSION_M2M --bearer-token "$M2M_TOKEN"
 :::
 
 The agent responds normally. But notice what is different under the hood.
@@ -181,7 +185,7 @@ Key observations:
 | `scope` | Pool-level scopes | Resource server scope (e.g. `portfolioadvisor/invoke`) |
 | `client_id` | Web client ID | M2M client ID |
 
-Because the M2M token has no `username` claim, AgentCore Identity threads the `sub` claim — which is the M2M client ID — as the caller identity. This identity is what flows into Cedar policy evaluation in [Lab 3](../50-lab4-governance/).
+Because the M2M token has no `username` claim, the caller identity is the `sub` (the M2M client ID). This inbound identity is recorded at the harness; the Gateway and Cedar (Lab 3) evaluate the harness's *outbound* M2M identity, not this inbound caller.
 
 ---
 
@@ -194,9 +198,9 @@ Client stores token in memory only — never on disk, never in env files
     ↓
 Client passes token on each invocation (Authorization: Bearer <token>)
     ↓
-AgentCore Runtime validates (signature + expiry + audience + issuer)
+AgentCore Harness validates inbound (signature + expiry + audience + issuer)
     ↓
-Runtime forwards to Gateway (same token, re-validated at that layer)
+Harness calls the Gateway with its own M2M token (Lab 2 outbound auth)
     ↓
 Token age > 55 min → Client proactively refreshes (REFRESH_TOKEN_AUTH)
     ↓
@@ -224,7 +228,7 @@ TOKEN=$(aws cognito-idp initiate-auth \
 ::::expand{header="Best practices reference (click to expand)"}
 
 :::alert{header="Secure every layer independently" type="info"}
-Runtime and Gateway are independent HTTPS endpoints. In Lab 2 you saw that each was created with its own JWT authorizer. Assume each endpoint will be discovered and called directly. Authenticate at all of them.
+The harness and Gateway are independent HTTPS endpoints. In Lab 2 you saw that each was created with its own JWT authorizer. Assume each endpoint will be discovered and called directly. Authenticate at all of them.
 :::
 
 **Multi-tenant isolation** — when a single agent deployment serves multiple users or teams:
