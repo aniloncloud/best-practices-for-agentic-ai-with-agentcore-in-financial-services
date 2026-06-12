@@ -189,6 +189,19 @@ Because the M2M token has no `username` claim, the caller identity is the `sub` 
 
 ---
 
+## Concept: how an agent authenticates to its tools
+
+When an agent calls a downstream tool, it presents one of two kinds of identity:
+
+- **As itself (machine-to-machine).** The agent uses its own service credential — what this workshop does (the harness fetches an M2M token to call the Gateway). Simple, and the right default when the tool doesn't need to know *which* user is behind the request. The downstream sees the agent.
+- **As the user (on-behalf-of).** The agent exchanges the user's inbound token for a new, scoped token that carries **both** the user's and the agent's identity. Now the tool can enforce per-user authorization, and the audit trail shows the real person. This is the stronger pattern when downstream access must be scoped to the end user.
+
+On-behalf-of is brokered by AgentCore Identity — the agent never handles the inbound token or client secrets. It does require an identity provider that supports OAuth token exchange (RFC 8693 / RFC 7523). Providers like Microsoft Entra, Okta, and Auth0 support it; Amazon Cognito (used in this workshop) does not, which is why these labs demonstrate the M2M pattern. For production systems that need per-user authorization at the tool, on-behalf-of is the pattern to reach for.
+
+→ Reference: [On-behalf-of token exchange with AgentCore Identity](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/on-behalf-of-token-exchange.html)
+
+---
+
 ## Token Lifecycle in Production
 
 :::code{language=bash showCopyAction=false}
