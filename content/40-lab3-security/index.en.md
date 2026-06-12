@@ -1,5 +1,5 @@
 ---
-title: "OAuth Token Flows: M2M & Token Lifecycle"
+title: "Optional Lab: OAuth Token Flows — M2M & Token Lifecycle"
 weight: 55
 ---
 

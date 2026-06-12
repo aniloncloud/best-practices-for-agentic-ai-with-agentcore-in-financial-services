@@ -1,5 +1,5 @@
 ---
-title: "Enterprise Tool Registry"
+title: "Optional Lab: Enterprise Tool Registry"
 weight: 60
 ---
 

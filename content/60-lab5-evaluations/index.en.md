@@ -1,5 +1,5 @@
 ---
-title: "Evaluations: Evaluate Agent Quality"
+title: "Optional Lab: Evaluations — Agent Quality"
 weight: 65
 ---
 

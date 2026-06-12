@@ -1,5 +1,5 @@
 ---
-title: "Observability Deep Dive"
+title: "Optional Lab: Observability Deep Dive"
 weight: 50
 ---
 

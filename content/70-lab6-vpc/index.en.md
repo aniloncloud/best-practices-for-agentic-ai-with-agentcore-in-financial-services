@@ -1,5 +1,5 @@
 ---
-title: "VPC Networking"
+title: "Optional Lab: VPC Networking"
 weight: 70
 ---
 
