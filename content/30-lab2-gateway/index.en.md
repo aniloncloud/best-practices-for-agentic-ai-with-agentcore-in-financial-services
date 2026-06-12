@@ -149,7 +149,7 @@ p = "app/PortfolioAdvisor/harness.json"
 cfg = json.load(open(p))
 cfg["config"]["inboundAuth"] = {
     "authorizerType": "CUSTOM_JWT",
-    "customJwtAuthorizer": {
+    "customJWTAuthorizer": {
         "discoveryUrl": os.environ["COGNITO_DISCOVERY_URL"],
         "allowedClients": [os.environ["COGNITO_CLIENT_ID"], os.environ["COGNITO_WEB_CLIENT_ID"]],
     },

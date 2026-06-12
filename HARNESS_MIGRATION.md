@@ -81,8 +81,10 @@ BP1 (observability) + BP5 (Gateway/policy/identity) + BP9 (security) shown live;
 - [ ] Reconcile FACILITATOR_GUIDE / prereqs references to "Claude Sonnet 4.5" with the 4.6 default.
 
 ### 4. Cedar action names — verify
-- [ ] Gateway target → tool action names still resolve as `ExecuteTrade___execute_trade` /
-      `PortfolioRiskCheck___check_portfolio_risk` when the gateway is attached to a harness.
+- [x] **VALIDATED via AgentCore MCP `get_gateway_guide`:** tool names exposed through MCP are
+      `${target_name}___${tool_name}` (three underscores) — confirms `ExecuteTrade___execute_trade`
+      and `PortfolioRiskCheck___check_portfolio_risk`.
+- [ ] Confirm the same naming holds when the gateway is attached to a **harness** (vs. a runtime).
 - [ ] The Lab 3 "policy engine not attached" troubleshooting expander still references
       runtime CloudFormation stack `AgentCore-PortfolioAdvisor-default` — confirm the harness
       backs the same stack/resource type (docs say harness shows as `::Runtime` in CloudTrail).
@@ -112,3 +114,44 @@ BP1 (observability) + BP5 (Gateway/policy/identity) + BP9 (security) shown live;
       FSI hardening narrative (mentioned in Lab 2 best-practices; not yet enforced in harness.json).
 - [ ] Reconcile the companion blog (BP2 cold-start/artifact framing is custom-code-runtime
       specific and partly N/A under the managed harness).
+
+---
+
+## Validation against the AgentCore MCP server (2026-06-11)
+
+Ran the installed `aws-agentcore` power's MCP server (`search_agentcore_docs`,
+`get_gateway_guide`) to validate the migration. **Important finding:** the MCP's
+curated documentation and control-plane tools are the **classic Runtime/Gateway/
+Memory/Identity/Policy** surface — there is **no harness tool and no harness
+documentation** in this MCP. Two separate harness searches returned only VPC,
+import-agent, runtime, and CloudFormation docs. So the MCP can validate the
+**primitives the harness sits on (Labs 2–3 mechanics), but not the harness layer itself.**
+
+### VALIDATED (authoritative, via MCP)
+- ✅ `agentcore add gateway --name <n> --authorizer-type CUSTOM_JWT --discovery-url <u>
+  --allowed-clients <ids>` — exact match to Lab 2 Step 2. Optional flags confirmed:
+  `--allowed-audience`, `--allowed-scopes`, `--policy-engine`, `--policy-engine-mode (LOG_ONLY|ENFORCE)`.
+- ✅ `agentcore add gateway-target --type lambda-function-arn --lambda-arn <arn>
+  --tool-schema-file <f> --gateway <n>` — exact match to Lab 2 Step 3.
+- ✅ **Triple-underscore tool naming** `${target_name}___${tool_name}` — confirms the
+  Lab 3 Cedar action names `ExecuteTrade___execute_trade` / `PortfolioRiskCheck___check_portfolio_risk`.
+- ✅ Cedar policy engine attach modes `LOG_ONLY | ENFORCE` — confirms Lab 3.
+- ✅ CLI install `npm install -g @aws/agentcore-cli` — confirms facilitator guide.
+- ✅ Gateway CUSTOM_JWT config key is `customJWTAuthorizer` (uppercase JWT). **Fixed** the
+  Lab 2 Step 5 harness inbound-auth heredoc to match this casing (was `customJwtAuthorizer`).
+
+### NOT VALIDATABLE via this MCP (harness layer — still BLOCKING, need GA CLI/docs)
+- ❌ `harness.json` schema (model/systemPrompt/tools/allowedTools/executionLimits field names).
+- ❌ `agentcore add harness`, `agentcore add tool --type agentcore_gateway`, `--harness` flags.
+- ❌ Harness inbound JWT config path AND whether `customJWTAuthorizer` is the right key there too.
+- ❌ **Identity auto-threading** (the "zero code edit" claim). Notably, the MCP's Gateway guide
+  describes the *classic* model where "you'll need to handle OAuth tokens properly" — i.e. manual
+  forwarding. The harness improvement (auto-threading) is exactly what must be confirmed against
+  the harness GA docs/CLI, because the whole Lab 2 narrative depends on it.
+- ❌ Model right-sizing `--model-id` override and mid-session switch.
+
+### Net
+Labs 2–3's gateway/Cedar mechanics are now **validated at the API/CLI level** — those commands
+are correct regardless of harness. The harness-specific layer (Lab 1 deploy, Lab 2 attach + auth,
+the zero-code claim) remains authored-from-docs and unverified; the AgentCore MCP cannot close
+that gap. A GA-CLI dry-run in a Workshop Studio event is still required (checklist items 1, 2, 3, 6).
