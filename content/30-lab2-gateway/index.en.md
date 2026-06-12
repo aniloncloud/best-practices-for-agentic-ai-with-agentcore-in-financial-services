@@ -7,13 +7,13 @@ weight: 30
 
 ## Overview
 
-Your agent has local tools (stock analysis, compliance rules), but real-world agents need access to existing business logic — Lambda functions, REST APIs, databases. Rather than embedding these connections directly in agent code, AgentCore Gateway provides a centralized control plane for tool access.
+Your harness answers from its system prompt today, but real-world agents need access to existing business logic — Lambda functions, REST APIs, databases. Rather than embedding those connections in agent code, AgentCore Gateway provides a centralized, governed control plane for tool access, and you attach it to the harness **by reference**.
 
 In this lab you'll do three things in one deploy:
 
 1. Create a Gateway **with JWT authentication from the start** — no unauthenticated window
-2. Register two Lambda tools (portfolio risk check and trade execution)
-3. Secure the Runtime with the same Cognito authorizer, and make the **one code edit of this session** so the agent forwards the caller's identity
+2. Register two Lambda tools (portfolio risk check and trade execution) and attach the Gateway to the harness
+3. Secure the harness with the same Cognito authorizer — **with zero agent code**, because AgentCore Identity threads the caller's identity to the tools for you
 
 You'll end with a 5,000-share trade that goes through. Remember it — Lab 3 will stop it.
 
@@ -22,16 +22,17 @@ You'll end with a 5,000-share trade that goes through. Remember it — Lab 3 wil
 :::code{language=bash showCopyAction=false}
 User (Cognito JWT)
     ↓ Bearer token
-AgentCore Runtime (PortfolioAdvisor)  ← JWT required  ← THIS LAB
-    ├── Local tools: get_stock_analysis(), get_compliance_rules()
-    └── MCP Client (forwards JWT)
-              ↓
+AgentCore Harness (PortfolioAdvisor)  ← JWT required  ← THIS LAB
+    │   model + system prompt (reference data)
+    │   Identity threads the caller's identity ──┐  (no forwarding code)
+    └── Gateway tool (by reference)              │
+              ↓                                  │
     AgentCore Gateway (my-gateway)    ← JWT required  ← THIS LAB
          ├── PortfolioRiskCheck → Lambda: workshop-check-portfolio-risk
-         └── ExecuteTrade       → Lambda: workshop-execute-trade
+         └── ExecuteTrade       → Lambda: workshop-execute-trade  (identity flows through)
 :::
 
-Both Runtime and Gateway now independently require a valid Cognito token. The same token flows from the caller through to each Lambda — you know **who** is calling at every hop.
+Both the harness and the Gateway now independently require a valid Cognito token, and the end user's identity is available at the Lambda — you know **who** is calling at every hop, without writing identity-forwarding code.
 
 ---
 
@@ -70,7 +71,7 @@ Run `source ~/portfolio-env.sh` again. Labs 2 and 3 both rely on these variables
 ## Step 2: Create the Gateway (JWT-secured from the start)
 
 ```bash
-agentcore add gateway --name my-gateway --runtimes PortfolioAdvisor \
+agentcore add gateway --name my-gateway \
   --authorizer-type CUSTOM_JWT \
   --discovery-url $COGNITO_DISCOVERY_URL \
   --allowed-clients $COGNITO_CLIENT_ID,$COGNITO_WEB_CLIENT_ID
@@ -116,106 +117,67 @@ The Lambda functions themselves are unchanged — the Gateway MCPifies them, mak
 
 ---
 
-## Step 4: Secure the Runtime with the Same Authorizer
+## Step 4: Attach the Gateway to the Harness (by reference)
 
-Instead of hand-editing JSON (error-prone with multi-line strings), patch `agentcore/agentcore.json` with this one paste:
+The harness gains the Gateway's tools by referencing the gateway — no MCP client code, no wiring:
+
+```bash
+agentcore add tool --harness PortfolioAdvisor \
+  --type agentcore_gateway \
+  --name my-gateway \
+  --gateway my-gateway
+```
+
+Every tool configured on `my-gateway` (both Lambda targets) now becomes available to the agent. Confirm it landed in `harness.json`:
+
+```bash
+cat app/PortfolioAdvisor/harness.json
+```
+
+You'll see a `tools` entry of type `agentcore_gateway` pointing at `my-gateway`.
+
+---
+
+## Step 5: Secure the Harness with the Same Authorizer
+
+Configure inbound JWT on the harness so callers must present a valid Cognito token. This is a **configuration change** — patch `harness.json`, no agent code:
 
 ```bash
 python3 - <<'EOF'
 import json, os
-p = "agentcore/agentcore.json"
+p = "app/PortfolioAdvisor/harness.json"
 cfg = json.load(open(p))
-rt = cfg["runtimes"][0]
-rt["requestHeaderAllowlist"] = ["X-Amzn-Bedrock-AgentCore-Runtime-Custom-User-Id", "Authorization"]
-rt["authorizerType"] = "CUSTOM_JWT"
-rt["authorizerConfiguration"] = {"customJwtAuthorizer": {
-    "discoveryUrl": os.environ["COGNITO_DISCOVERY_URL"],
-    "allowedClients": [os.environ["COGNITO_CLIENT_ID"], os.environ["COGNITO_WEB_CLIENT_ID"]]}}
+cfg["config"]["inboundAuth"] = {
+    "authorizerType": "CUSTOM_JWT",
+    "customJwtAuthorizer": {
+        "discoveryUrl": os.environ["COGNITO_DISCOVERY_URL"],
+        "allowedClients": [os.environ["COGNITO_CLIENT_ID"], os.environ["COGNITO_WEB_CLIENT_ID"]],
+    },
+}
 json.dump(cfg, open(p, "w"), indent=2)
-print("Runtime authorizer configured.")
+print("Harness inbound JWT configured.")
 EOF
 ```
 
-Verify the result:
-
-```bash
-cat agentcore/agentcore.json
-```
-
-You'll see three new fields on the runtime entry:
-
-:::code{language=json showCopyAction=false}
-"requestHeaderAllowlist": [
-  "X-Amzn-Bedrock-AgentCore-Runtime-Custom-User-Id",
-  "Authorization"
-],
-"authorizerType": "CUSTOM_JWT",
-"authorizerConfiguration": {
-  "customJwtAuthorizer": {
-    "discoveryUrl": "<your-cognito-discovery-url>",
-    "allowedClients": ["<client-id>", "<web-client-id>"]
-  }
-}
-:::
-
-Same `discoveryUrl` and `allowedClients` as the Gateway — one Cognito pool secures both endpoints. `Authorization` in `requestHeaderAllowlist` is what allows Step 5 to work: AgentCore passes that header into `context.request_headers` so the agent code can read and forward the token.
+Same `discoveryUrl` and `allowedClients` as the Gateway — one Cognito pool secures both endpoints.
 
 ---
 
-## Step 5: The One Code Edit — Forward the Caller's Identity
+## Step 6: No Code Edit — Identity Threads the Caller Through
 
-Open `app/PortfolioAdvisor/main.py`. Right now the `@app.entrypoint` function reads the session ID but ignores headers entirely:
+::::alert{header="This is the step that used to be a code edit" type="info"}
+In a hand-written agent, this is where you'd add `import jwt`, an `extract_user_id()` helper, and code to forward the `Authorization` header to the Gateway on every call. **On the harness, you write none of it.**
 
-:::code{language=python showCopyAction=false}
-@app.entrypoint
-async def invoke(payload, context):
-    log.info("Invoking Agent...")
-    session_id = context.session_id
-    agent = get_or_create_agent(session_id)        # ← no auth_header passed
-    ...
-:::
+When the harness has inbound OAuth configured (Step 5), **AgentCore Identity threads the end-user identity through to the Gateway tools automatically.** A tool call to `execute_trade` carries the caller's identity without any forwarding code — which is exactly what Lab 3's Cedar policies will evaluate.
 
-The Gateway now requires a JWT on every request. Without this edit, the agent's MCP client will call the Gateway with no token and get a 401. The fix: read the `Authorization` header from the incoming context and pass it through.
+The result: across this entire live session there are **zero agent code edits**. Production hardening is configuration, not code.
+::::
 
-Add `import jwt` to the imports at the top of `main.py`, then add the helper and replace the `invoke` function. Everything else in the file stays the same:
-
-:::code{language=python}
-import jwt  # add to existing imports at top of main.py
-
-def extract_user_id(context) -> str:
-    """Extract user identity from JWT bearer token, or fall back to custom header."""
-    headers = context.request_headers or {}
-    auth_header = headers.get("Authorization") or headers.get("authorization", "")
-    if auth_header.startswith("Bearer "):
-        try:
-            token = auth_header.split(" ", 1)[1]
-            claims = jwt.decode(token, options={"verify_signature": False})
-            username = claims.get("username") or claims.get("sub")
-            if username:
-                return username
-        except Exception as e:
-            log.warning(f"Failed to decode JWT: {e}")
-    return headers.get("x-amzn-bedrock-agentcore-runtime-custom-user-id", "anonymous")
-
-@app.entrypoint
-async def invoke(payload, context):
-    log.info("Invoking Agent...")
-    session_id = context.session_id
-    headers = context.request_headers or {}
-    auth_header = headers.get("Authorization") or headers.get("authorization", "")
-    user_id = extract_user_id(context)
-    agent = get_or_create_agent(session_id, user_id, auth_header)
-    stream = agent.stream_async(payload.get("prompt"))
-    async for event in stream:
-        if "data" in event and isinstance(event["data"], str):
-            yield event["data"]
-:::
-
-`get_or_create_agent` already passes `auth_header` through to `get_gateway_mcp_client()` (see `mcp_client/client.py`) — that function attaches it as an `Authorization` header on every MCP request to the Gateway. This is **identity propagation**, not service identity: the agent forwards the caller's own token rather than presenting a separate service credential. The helper `extract_user_id` is defensive — it decodes the JWT without re-verifying the signature (the Runtime already validated it) and falls back to `"anonymous"` if anything fails.
+> **Note:** Per-user identity threading uses the Bearer JWT inbound path (what you configured). It is not available when callers authenticate with SigV4 (IAM) — see the self-paced [OAuth Token Flows](../40-lab3-security/) lab for the credential-pattern details.
 
 ---
 
-## Step 6: Deploy
+## Step 7: Deploy
 
 Validate configuration first, then deploy:
 
@@ -227,34 +189,27 @@ agentcore validate
 agentcore deploy -y -v
 ```
 
-This is your **second deploy** (first was Lab 1) and the last one until Lab 3. While it runs (~2–3 min), work through Step 7.
+This is your **second deploy** (first was Lab 1) and the last one until Lab 3. While it runs (~2–3 min), work through Step 8.
 
 ---
 
-## Step 7: While This Deploys — Credential Patterns and Tool Schemas
+## Step 8: While This Deploys — Credential Patterns and Tool Schemas
 
 ::::expand{header="Read while the deploy runs (click to open)"}
 
-### Credential Patterns for Agent-to-Tool Authentication
+### Where credentials live
 
-Three patterns exist; you're using JWT Passthrough in this lab.
+Notice what you did *not* do: you didn't paste a secret into the agent, and you didn't write code to forward the user's identity. Three credential patterns exist; the harness with inbound OAuth uses identity threading for you.
 
 | Pattern | How It Works | Best For |
 |---------|-------------|----------|
-| **IAM Service Credential** | Agent's execution role signs requests with SigV4 | Service-to-service; no user context needed |
-| **JWT Passthrough** | Agent forwards the caller's Cognito token as-is | Per-user policies; user identity needed downstream |
-| **Workload Identity (OBO)** | `GetWorkloadAccessTokenForJWT()` exchanges the user token for a scoped workload token | Multi-agent chains; third-party API OAuth exchange |
+| **IAM Service Credential** | Caller signs requests with SigV4 | Service-to-service; no user context needed |
+| **JWT inbound + Identity threading** | Caller presents a Cognito JWT; Identity threads the user to tools | Per-user policies; user identity needed downstream |
+| **Workload Identity (OBO)** | A user token is exchanged for a scoped workload token | Multi-agent chains; third-party API OAuth exchange |
 
-**Choosing a pattern:**
+The pattern to remember: credentials are injected **at the edge** (Gateway / Identity), never held in the agent process. A secret the agent never holds can't leak through a log line, a traceback, or a prompt-injection attempt. That's why "add auth" was a config change, not a code change.
 
-| Scenario | Pattern | Why |
-|----------|---------|-----|
-| Single-tenant agent, no per-user policies | IAM Service Credential | Simplest; no token management overhead |
-| Per-user authorization or audit required | JWT Passthrough | Gateway applies policies based on user identity |
-| Agent calls another agent's Gateway | Workload Identity (OBO) | Preserves user provenance across hops |
-| Agent needs to call a third-party OAuth API | Workload Identity + Token Vault | Exchange user JWT for external OAuth tokens |
-
-In this lab you're using JWT Passthrough: the user authenticates to Cognito, passes the token to the Runtime, and the Runtime's agent code forwards that same token to the Gateway. The Lambda tools receive requests whose identity traces back to the original user.
+> **Deep dive (self-paced):** credential patterns and on-behalf-of token exchange are covered in [OAuth Token Flows](../40-lab3-security/) and the AgentCore optimization companion guide.
 
 ---
 
@@ -274,11 +229,13 @@ Open `app/PortfolioAdvisor/tool/portfolio_risk_schema.json` and `app/PortfolioAd
 - Internal jargon absent from the system prompt — "run DTC check" means nothing without context
 - Missing "do not use for X" guidance when tools overlap in purpose
 
+> **Scaling note:** Once a Gateway catalog grows past ~20 tools, passing every schema to the model on every turn wastes tokens and hurts tool-selection accuracy. Gateway's built-in semantic tool search returns only the relevant tools for a query. With two tools you don't need it yet — but it's the right lever as the catalog grows.
+
 ::::
 
 ---
 
-## Step 8: Prove Auth Works End-to-End
+## Step 9: Prove Auth Works End-to-End
 
 Wait for the deploy to complete, then work through these three invocations.
 
@@ -305,28 +262,29 @@ Tokens are valid for 60 minutes. If you see an auth error in a later step, re-ru
 ```bash
 SESSION_ID=$(python3 -c 'import uuid; print(uuid.uuid4())')
 
-agentcore invoke "Check the portfolio risk for PORT-001" \
-  --session-id $SESSION_ID --bearer-token "$TOKEN" --stream
+agentcore invoke --harness PortfolioAdvisor "Check the portfolio risk for PORT-001" \
+  --session-id $SESSION_ID --bearer-token "$TOKEN"
 ```
 
-You'll see the agent call `check_portfolio_risk` through the Gateway MCP client. Both the Runtime and the Gateway validated the JWT before the Lambda was ever reached.
+You'll see the agent call `check_portfolio_risk` through the Gateway. Both the harness and the Gateway validated the JWT before the Lambda was ever reached.
 
 ### Unauthenticated Invoke (should fail)
 
 ```bash
-agentcore invoke "Check the portfolio risk for PORT-001" \
-  --session-id $SESSION_ID --stream
+agentcore invoke --harness PortfolioAdvisor "Check the portfolio risk for PORT-001" \
+  --session-id $SESSION_ID
 ```
 
-You'll see a `401 Unauthorized` response. The Runtime rejected the request before it reached your agent code — no unauthenticated call ever touches the Lambda. Both Runtime and Gateway now reject anonymous callers independently.
+You'll see a `401 Unauthorized` response. The harness rejected the request before it reached the agent loop — no unauthenticated call ever touches the Lambda. Both the harness and Gateway now reject anonymous callers independently.
 
 ---
 
-## Step 9: Execute a Trade — Remember This One
+## Step 10: Execute a Trade — Remember This One
 
 ```bash
-agentcore invoke "Buy 5000 shares of MSFT at limit price for a large client position" \
-  --session-id $SESSION_ID --bearer-token "$TOKEN" --stream
+agentcore invoke --harness PortfolioAdvisor \
+  "Buy 5000 shares of MSFT at limit price for a large client position" \
+  --session-id $SESSION_ID --bearer-token "$TOKEN"
 ```
 
 The agent calls `execute_trade` through the Gateway and the trade goes through.
@@ -339,32 +297,16 @@ In Lab 3 you'll attach a Cedar policy engine to the Gateway and run this exact p
 
 ---
 
-## Architecture
-
-:::code{language=bash showCopyAction=false}
-Client (JWT token from Cognito)
-    ↓ validated at Runtime
-AgentCore Runtime (PortfolioAdvisor)
-    ├── get_stock_analysis()       ← local tools, always available
-    ├── get_compliance_rules()     ← local tools, always available
-    └── MCP Client (forwards JWT)
-              ↓ validated at Gateway
-    AgentCore Gateway (my-gateway)
-         ├── PortfolioRiskCheck → Lambda: workshop-check-portfolio-risk
-         └── ExecuteTrade       → Lambda: workshop-execute-trade
-:::
-
 ## What Just Happened?
 
-You created a Gateway with JWT authentication enabled from day one, registered two Lambda tools, patched the Runtime config to require the same authorizer, made the one code edit that threads the caller's token through the agent, and deployed once. The token flow is:
+You created a Gateway with JWT authentication enabled from day one, registered two Lambda tools, attached the Gateway to the harness by reference, configured the same inbound authorizer on the harness, and deployed once. Critically, you wrote **no agent code** — AgentCore Identity threads the caller's identity to the tools. The token flow is:
 
 ```
 User → Cognito (authenticate) → JWT access token
-JWT → Runtime (validate: signature + expiry + audience + issuer)
-JWT → agent code (extract user_id, hold auth_header)
-JWT → Gateway MCP call (forwarded in Authorization header)
-JWT → Gateway (validate again, independently)
-Gateway → Lambda (user identity available if needed)
+JWT → Harness (validate: signature + expiry + audience + issuer)
+Identity → threads end-user identity to Gateway tools (no forwarding code)
+JWT/identity → Gateway (validate again, independently)
+Gateway → Lambda (user identity available for policy + audit)
 ```
 
 ---
@@ -383,9 +325,10 @@ Gateway → Lambda (user identity available if needed)
 
 **Defense in depth:**
 
-- **Both layers need auth.** Runtime and Gateway are independent HTTPS endpoints. Securing only the Runtime leaves the Gateway URL discoverable and directly callable — bypassing your agent entirely. Each layer must reject unauthorized requests on its own.
+- **Both layers need auth.** The harness and Gateway are independent HTTPS endpoints. Securing only the harness leaves the Gateway URL discoverable and directly callable — bypassing your agent entirely. Each layer must reject unauthorized requests on its own.
 - **Use `allowedClients` for least privilege.** Issue separate Cognito app clients for users, pipelines, and other agents. List only the ones that need access. A compromised credential then affects only that one client.
-- **Never embed tokens.** JWT tokens are credentials. Read the token from request context per invocation, forward it, and treat it as ephemeral. Do not log it, store it in environment variables, or include it in system prompts.
+- **Never embed tokens.** With the harness, you don't hold them at all — Identity manages credential injection at the edge. Don't log tokens, store them in environment variables, or include them in system prompts.
+- **Restrict tools with `allowedTools`.** The harness ships with built-in `shell` and `file_operations` tools. In a regulated workload, scope the agent to only the tools it needs (the Gateway tools) so it can't run arbitrary shell commands.
 - **Cognito rotates signing keys automatically.** AgentCore fetches public keys from the OIDC `discoveryUrl` on each validation — key rotation requires no manual action.
 
 ---

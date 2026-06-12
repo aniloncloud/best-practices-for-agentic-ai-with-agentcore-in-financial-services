@@ -32,7 +32,7 @@ The live session answers questions 1, 2, and 3 directly. Questions 4 and 5 are a
 :::code{language=bash showCopyAction=false}
 ── LIVE SESSION (52 min hands-on) ──────────────────────────────────────────
 
-Lab 1: Deploy to AgentCore Runtime
+Lab 1: Deploy to the AgentCore Harness
   │   "Here's the agent, running in the cloud"
   │   (observability is on from the first invoke)  ─── Question 3 begins ✓
   │
@@ -71,12 +71,12 @@ Client (with JWT token)
     ↓
 Cognito validates token ──────────────────────────── Lab 2
     ↓
-AgentCore Runtime (PortfolioAdvisor) ─────────────── Lab 1
+AgentCore Harness (PortfolioAdvisor) ─────────────── Lab 1
     │   with OpenTelemetry traces ────────────────── (from first invoke)
     │
-    ├── Local tools: get_stock_analysis(), get_compliance_rules()
+    ├── Model + system prompt (stock/compliance reference data)
     │
-    └── MCP Client → AgentCore Gateway ───────────── Lab 2
+    └── Gateway tool (by reference) → AgentCore Gateway ─ Lab 2
                           │
                           ├── Cedar Policy Engine ── Lab 3
                           │   (permit/forbid rules)
@@ -89,7 +89,7 @@ AgentCore Runtime (PortfolioAdvisor) ──────────────�
 
 VPC private-subnet isolation (Lab: VPC Networking) and continuous Evaluations are added in the self-paced section.
 
-You'll build this **incrementally** — the agent code stays virtually unchanged. Each lab adds a layer through configuration and CLI commands.
+You'll build this **incrementally** — the agent config stays virtually unchanged. Each lab adds a layer through configuration and CLI commands.
 
 ---
 
@@ -111,9 +111,9 @@ Don't add logging after something breaks. AgentCore instruments every invocation
 
 Business rules don't belong in prompts. A prompt can be manipulated; a Cedar policy cannot. Trade limits and restricted securities are enforced deterministically at the Gateway boundary — the agent can't bypass them even if instructed to. You'll build this in Lab 3.
 
-### Minimal Code Changes for Production Hardening
+### Zero Code Changes for Production Hardening
 
-Authentication (Lab 2), governance (Lab 3), evaluations, and VPC isolation are all **configuration changes** — not application code changes. Across the entire live session there is exactly one code edit: pasting the auth-forwarding snippet in Lab 2. Gateway wiring requires no edit — the agent code is pre-wired and automatically connects once a Gateway exists. Platform teams own the guardrails; agent teams own the logic.
+The agent is a declarative **harness** (`harness.json`) — model, system prompt, and tools as configuration, with no orchestration code to write or maintain. Authentication (Lab 2), governance (Lab 3), evaluations, and VPC isolation are all **configuration changes**. Across the entire live session there are **zero agent code edits** — even identity forwarding to tools is handled for you by AgentCore Identity. Gateway tools attach by reference. Platform teams own the guardrails; agent teams own the logic.
 
 ---
 

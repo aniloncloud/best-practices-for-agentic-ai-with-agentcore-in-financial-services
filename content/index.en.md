@@ -25,7 +25,8 @@ The AgentCore CLI abstracts away infrastructure complexity, letting developers f
 
 | Service | Description |
 |---------|-------------|
-| **AgentCore Runtime** | Serverless execution environment for deployed agents |
+| **AgentCore Harness** | Managed, declarative agent runtime — declare model, prompt, and tools in config (powered by Strands Agents) |
+| **AgentCore Runtime** | Serverless execution environment underlying the harness |
 | **AgentCore Gateway** | MCP-compatible proxy to centralize and secure tool access across agents |
 | **AgentCore Identity** | Secure credential management for API keys and OAuth providers |
 | **AgentCore Observability** | Tracing and monitoring via CloudWatch GenAI Observability |
@@ -35,7 +36,7 @@ The AgentCore CLI abstracts away infrastructure complexity, letting developers f
 
 ## What You'll Build
 
-In this hands-on workshop, you'll build a **Portfolio Advisor Agent** for a capital markets firm — deploying it to production and progressively adding security, governance, and observability using the AgentCore CLI.
+In this hands-on workshop, you'll deploy a **Portfolio Advisor Agent** for a capital markets firm — defined as a declarative **AgentCore harness** (no orchestration code) — and progressively add security, governance, and observability through configuration using the AgentCore CLI.
 
 > **Note:** The financial data, compliance rules, and trading scenarios in this workshop are simulated for educational purposes only and do not constitute actual regulatory guidance.
 
@@ -46,7 +47,7 @@ In this hands-on workshop, you'll build a **Portfolio Advisor Agent** for a capi
 | Segment | Title | Time | What You'll Do |
 |---------|-------|------|----------------|
 | Talk | Intro: AgentCore for Financial Services | ~8 min | Facilitator presents; read [Foundations](./15-foundations/) |
-| [Lab 1](./20-lab1-runtime/) | Deploy to AgentCore Runtime | ~10 min | Deploy pre-built agent, invoke via CLI; read while it deploys |
+| [Lab 1](./20-lab1-runtime/) | Deploy to the AgentCore Harness | ~10 min | Deploy declarative harness, invoke, right-size the model live; read while it deploys |
 | [Lab 2](./30-lab2-gateway/) | Connect Tools with Gateway + JWT Auth | ~18 min | Gateway creation, Lambda tool registration, JWT auth end-to-end |
 | [Lab 3](./50-lab4-governance/) | Govern Agent Actions with Cedar Policies | ~16 min | Cedar policies deny a 5,000-share trade that succeeded in Lab 2 |
 | Buffer | Finish up / questions | ~8 min | Fast finishers: try the restricted-ticker Cedar policy extension |
@@ -75,9 +76,9 @@ Client (with JWT token)
     ↓
 Cognito validates token
     ↓
-AgentCore Runtime (PortfolioAdvisor)
-    ├── Local tools: get_stock_analysis(), get_compliance_rules()
-    └── MCP Client → AgentCore Gateway (JWT + Cedar Policy Engine)
+AgentCore Harness (PortfolioAdvisor)
+    ├── Model + system prompt (stock/compliance reference data)
+    └── Gateway tool (by reference) → AgentCore Gateway (JWT + Cedar Policy Engine)
                           ├── PortfolioRiskCheck → Lambda
                           └── ExecuteTrade → Lambda (governed by Cedar policies)
                                 ↓

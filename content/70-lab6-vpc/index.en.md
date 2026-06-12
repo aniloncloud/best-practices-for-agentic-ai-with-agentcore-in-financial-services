@@ -201,8 +201,8 @@ Client (with JWT token)
     ↓
 AgentCore Runtime (PortfolioAdvisor) — VPC Mode
     ├── Private subnets (no public IP, ENIs attached)
-    ├── Local tools: get_stock_analysis(), get_compliance_rules()
-    └── MCP Client → AgentCore Gateway ──── via bedrock-agentcore-gateway VPC endpoint
+    ├── Model + system prompt (stock/compliance reference data)
+    └── Gateway tool (by reference) → AgentCore Gateway ──── via bedrock-agentcore-gateway VPC endpoint
                           ↓
                     Cedar Policy Engine
                           ↓

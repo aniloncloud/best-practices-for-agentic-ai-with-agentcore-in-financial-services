@@ -7,7 +7,7 @@ weight: 40
 
 ## Overview
 
-Your agent is deployed, has Gateway tools, and is secured with JWT authentication. Authentication answered *"who is calling?"* — but nothing yet answers *"what are they allowed to do?"*
+Your harness is deployed, has Gateway tools, and is secured with JWT authentication. Authentication answered *"who is calling?"* — but nothing yet answers *"what are they allowed to do?"*
 
 You just watched a 5,000-share MSFT trade go through in Lab 2. The authenticated caller had every right to ask; the agent had every reason to comply. There were no quantity limits, no restricted-ticker checks, no approval gates. Any authenticated user could run that same prompt right now.
 
@@ -22,7 +22,7 @@ The compliance rules and trade policies in this workshop are **simulated for edu
 :::code{language=bash showCopyAction=false}
 Client (authenticated)
     ↓
-AgentCore Runtime → MCP Client → AgentCore Gateway (my-gateway)
+AgentCore Harness → AgentCore Gateway (my-gateway)
                                        │
                                        ▼
                          ┌─────────────────────────────┐
@@ -143,6 +143,10 @@ The most common governance mistake in agentic AI is writing rules as system-prom
 
 The key insight is the last row: Cedar policies operate entirely outside the agent. The Lambda function doesn't know there's a quantity limit. The agent doesn't know either. The Gateway enforces it silently — and logs the decision either way.
 
+:::alert{header="Cost note" type="info"}
+Authorization is per-request work, billed per call — so you attach a policy engine where it adds control, not reflexively to every gateway. It's the same "spend where it earns its keep" principle behind the model right-sizing you did in Lab 1 and the harness execution limits (`maxIterations`, `maxTokens`). Deep dive: the per-service cost table in the AgentCore optimization companion guide.
+:::
+
 ---
 
 ### Re-read the Two Policies You Just Submitted
@@ -205,8 +209,9 @@ echo "Token refreshed"
 ### Test 1: Small trade — should succeed ✅
 
 ```bash
-agentcore invoke "Execute a trade: buy 500 shares of AAPL at market price for rebalancing" \
-  --bearer-token "$TOKEN" --stream
+agentcore invoke --harness PortfolioAdvisor \
+  "Execute a trade: buy 500 shares of AAPL at market price for rebalancing" \
+  --bearer-token "$TOKEN"
 ```
 
 Quantity 500 < 1000 — the `trade_quantity_limit` permit matches. The Gateway forwards the request to the Lambda, and the trade executes.
@@ -220,8 +225,9 @@ In Lab 2 you ran this prompt and the trade went through. Nothing has changed in 
 :::
 
 ```bash
-agentcore invoke "Buy 5000 shares of MSFT at limit price for a large client position" \
-  --bearer-token "$TOKEN" --stream
+agentcore invoke --harness PortfolioAdvisor \
+  "Buy 5000 shares of MSFT at limit price for a large client position" \
+  --bearer-token "$TOKEN"
 ```
 
 The agent calls `execute_trade` with `quantity=5000`. The Gateway evaluates the Cedar policy: `5000 < 1000` is false — no permit matches — default deny applies. The Gateway returns an authorization error. **The Lambda is never invoked.**
@@ -235,8 +241,9 @@ Zero lines of agent code changed since Lab 2. The only change was attaching a Ce
 ### Test 3: Portfolio risk check — should still succeed ✅
 
 ```bash
-agentcore invoke "Check the portfolio risk for PORT-002" \
-  --bearer-token "$TOKEN" --stream
+agentcore invoke --harness PortfolioAdvisor \
+  "Check the portfolio risk for PORT-002" \
+  --bearer-token "$TOKEN"
 ```
 
 The `portfolio_risk_check_policy` permit matches — `check_portfolio_risk` still works for all authenticated users.
@@ -250,7 +257,7 @@ User: "Buy 5000 shares of MSFT"
     ↓
 Agent decides to call execute_trade(ticker="MSFT", quantity=5000, ...)
     ↓
-MCP Client sends request to Gateway
+Harness sends the tool request to Gateway (caller identity threaded by Identity)
     ↓
 Gateway → Policy Engine evaluates Cedar policies
     ↓
@@ -276,7 +283,7 @@ For FSI, it's not enough that the agent works correctly — you need to *prove* 
 ### View Agent Reasoning Traces
 
 ```bash
-agentcore logs --runtime PortfolioAdvisor --since 5m
+agentcore logs --harness PortfolioAdvisor --since 5m
 ```
 
 In the CloudWatch GenAI Observability dashboard (**GenAI Observability → Bedrock AgentCore → PortfolioAdvisor → DEFAULT**), each trace shows the agent's tool selection decision, input parameters, and success or failure result.
@@ -329,8 +336,9 @@ agentcore add policy \
 Then test it — try a trade that is within the quantity limit but on a restricted ticker:
 
 ```bash
-agentcore invoke "Buy 100 shares of RESTRICTED-001 at market price" \
-  --bearer-token "$TOKEN" --stream
+agentcore invoke --harness PortfolioAdvisor \
+  "Buy 100 shares of RESTRICTED-001 at market price" \
+  --bearer-token "$TOKEN"
 ```
 
 Denied — even though 100 < 1000. The `forbid` on `RESTRICTED-001` overrides the `permit` for quantity < 1000. Cedar `forbid` always wins over `permit`.

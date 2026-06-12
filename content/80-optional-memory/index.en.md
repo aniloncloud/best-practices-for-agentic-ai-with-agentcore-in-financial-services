@@ -107,6 +107,10 @@ def get_memory_session_manager(session_id: str, actor_id: str) -> Optional[Agent
     )
 :::
 
+:::alert{header="Harness note" type="warning"}
+This self-paced lab reflects the original code-based agent. On the AgentCore **harness**, persistent memory is enabled through configuration (a memory resource referenced by the harness) rather than by editing `main.py`. The concepts below — SEMANTIC and SUMMARIZATION strategies, actor/session scoping — are identical. A harness-native version of these steps is tracked in `HARNESS_MIGRATION.md`.
+:::
+
 ## Step 3: Update main.py to Use Memory
 
 Open `app/PortfolioAdvisor/main.py`. Make the following changes:

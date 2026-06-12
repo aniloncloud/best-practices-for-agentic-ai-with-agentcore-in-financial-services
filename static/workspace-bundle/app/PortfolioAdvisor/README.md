@@ -8,10 +8,11 @@ commands like `deploy`, `dev`, and `invoke` rely on the configuration stored her
 
 ## Agent Root
 
-The main entrypoint to your app is defined in `main.py`. Using the AgentCore SDK `@app.entrypoint` decorator, this
-file defines a Starlette ASGI app with the chosen Agent framework SDK running within.
+This agent is defined as a declarative **AgentCore harness**, not hand-written orchestration code. The agent lives in
+`harness.json`: the model, system prompt, tools, and execution limits. AgentCore runs the agent loop (reasoning, tool
+selection, action, response streaming) from that config. The harness is powered by Strands Agents.
 
-`model/load.py` instantiates your chosen model provider.
+`tool/*.json` contains the JSON Schemas for the Gateway Lambda tool targets (added in Lab 2).
 
 ## Environment Variables
 
@@ -21,18 +22,14 @@ file defines a Starlette ASGI app with the chosen Agent framework SDK running wi
 
 # Developing locally
 
-If installation was successful, a virtual environment is already created with dependencies installed.
+`agentcore dev` will start a local harness session for rapid prompt iteration.
 
-Run `source .venv/bin/activate` before developing.
+In a new terminal, you can invoke that session with:
 
-`agentcore dev` will start a local server on 0.0.0.0:8080.
-
-In a new terminal, you can invoke that server with:
-
-`agentcore invoke --dev "What can you do"`
+`agentcore invoke --harness PortfolioAdvisor --dev "What can you do"`
 
 # Deployment
 
-After providing credentials, `agentcore deploy` will deploy your project into Amazon Bedrock AgentCore.
+After providing credentials, `agentcore deploy` will deploy your harness into Amazon Bedrock AgentCore.
 
-Use `agentcore invoke` to invoke your deployed agent.
+Use `agentcore invoke --harness PortfolioAdvisor` to invoke your deployed agent.

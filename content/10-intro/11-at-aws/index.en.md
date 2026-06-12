@@ -89,7 +89,7 @@ cd ~/PortfolioAdvisor
 ls app/PortfolioAdvisor/
 :::
 
-You should see: `main.py`, `mcp_client/`, `model/`, `tool/`, `pyproject.toml`
+You should see: `harness.json` (the agent definition) and `tool/` (Gateway tool schemas)
 
 ## What's Pre-Installed
 

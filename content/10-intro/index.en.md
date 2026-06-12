@@ -14,7 +14,7 @@ Your Workshop Studio environment comes **fully pre-provisioned**. The following 
 | Resource | What It Provides |
 |----------|-----------------|
 | **VS Code Server** | Browser-based IDE with terminal access |
-| **Agent workspace** | Complete `PortfolioAdvisor/` project with agent code, tools, and dependencies pre-installed |
+| **Agent workspace** | Complete `PortfolioAdvisor/` harness project (`harness.json` + tool schemas), AgentCore CLI pre-installed |
 | **Amazon Cognito** | User Pool with M2M client, web client, and test user (`workshopuser@example.com` / `WorkshopPass1!`) |
 | **Lambda functions** | `workshop-check-portfolio-risk` and `workshop-execute-trade` — ready to be wired through Gateway |
 | **VPC** | Two private subnets, NAT Gateway, VPC endpoints for AgentCore, Bedrock Runtime, S3, CloudWatch Logs |
@@ -56,8 +56,8 @@ This workshop runs exclusively in **us-west-2**. If your region is different, ru
 
 That's all the orientation you need. The agent code tour happens inside Lab 1's deploy-wait panel — head there now.
 
-:::alert{header="About the agent code" type="info"}
-`app/PortfolioAdvisor/main.py` is pre-wired for Gateway connectivity. `get_gateway_mcp_client()` returns `None` until a Gateway exists — once Lab 2 creates one, the Gateway connection is live automatically. No code edits are needed for the gateway.
+:::alert{header="About the agent" type="info"}
+The agent is defined declaratively in `app/PortfolioAdvisor/harness.json` — model, system prompt, and tools. There is no orchestration code. Once Lab 2 creates a Gateway, you attach it to the harness by reference and its tools appear automatically. There are no agent code edits anywhere in this workshop.
 :::
 
 ## Workshop Schedule
@@ -67,7 +67,7 @@ That's all the orientation you need. The agent code tour happens inside Lab 1's 
 | Segment | Title | Time | What You'll Do |
 |---------|-------|------|----------------|
 | Talk | Intro: AgentCore for Financial Services | ~8 min | Facilitator presents; read [Foundations](../15-foundations/) |
-| [Lab 1](../20-lab1-runtime/) | Deploy to AgentCore Runtime | ~10 min | Deploy pre-built agent, invoke via CLI; read while it deploys |
+| [Lab 1](../20-lab1-runtime/) | Deploy to the AgentCore Harness | ~10 min | Deploy declarative harness, invoke, right-size the model live; read while it deploys |
 | [Lab 2](../30-lab2-gateway/) | Connect Tools with Gateway + JWT Auth | ~18 min | Gateway creation, Lambda tool registration, JWT auth end-to-end |
 | [Lab 3](../50-lab4-governance/) | Govern Agent Actions with Cedar Policies | ~16 min | Cedar policies deny a 5,000-share trade that succeeded in Lab 2 |
 | Buffer | Finish up / questions | ~8 min | Fast finishers: try the restricted-ticker Cedar policy extension |

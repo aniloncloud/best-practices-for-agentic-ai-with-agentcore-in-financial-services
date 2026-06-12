@@ -203,8 +203,8 @@ Cognito validates token
     ↓
 AgentCore Runtime (PortfolioAdvisor)
     ├── Cedar policy enforcement (Lab 3)
-    ├── Local tools: get_stock_analysis(), get_compliance_rules()
-    └── MCP Client → AgentCore Gateway → Lambda: check_portfolio_risk
+    ├── Model + system prompt (stock/compliance reference data)
+    └── Gateway tool (by reference) → AgentCore Gateway → Lambda: check_portfolio_risk
                           ↓
                     CloudWatch (traces, logs, metrics)
                           ↓

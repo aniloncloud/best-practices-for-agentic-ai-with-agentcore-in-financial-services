@@ -33,7 +33,7 @@ The following resources are provisioned before participants arrive. Participants
 | Resource | Details |
 |----------|---------|
 | VS Code Server | Browser-based IDE available immediately; no local install required |
-| Agent workspace | `~/PortfolioAdvisor/` — complete project with agent code, tools, and dependencies installed |
+| Agent workspace | `~/PortfolioAdvisor/` — declarative harness project (`harness.json` + tool schemas), CLI installed |
 | Cognito User Pool | M2M client (client_credentials flow), web client (auth code flow), test user `workshopuser@example.com` / `WorkshopPass1!` |
 | Lambda functions | `workshop-check-portfolio-risk`, `workshop-execute-trade` |
 | VPC | Private subnets, NAT Gateway, VPC endpoints for AgentCore, Bedrock, SSM, CloudWatch, S3, DynamoDB |
@@ -82,7 +82,7 @@ The original workshop had participants scaffold, write, and iteratively build th
 - **Lab 1 is shorter by design.** Participants run `agentcore deploy` within the first few minutes. The "While this deploys" reading box covers the CISO questions and code tour.
 - **There is no `agentcore create` or `agentcore dev` step in the core labs.** The agent already exists. Participants deploy it, then modify configuration (agentcore.json) and redeploy to add capabilities.
 - **Labs focus on configuration, not construction.** Lab 2 (Gateway + JWT) and Lab 3 (Cedar governance) involve agentcore.json edits plus CLI commands. Emphasize that in production, governance is an infrastructure concern, not an application code concern.
-- **The "no code changes" message lands harder.** Because participants spent Lab 1 looking at the pre-written agent code, demonstrating in Lab 3 that the code didn't change at all — only the config did — is more impactful.
+- **The "no code changes" message lands harder.** The agent is a declarative harness — there is no orchestration code at all. Demonstrating in Lab 3 that only configuration changed across the entire session is the whole point.
 
 ### 2026-06-11: 60-Minute Builder Session Restructure (AWS NY Summit)
 
@@ -91,12 +91,24 @@ The workshop was restructured from a ~3-hour format to a **60-minute builder ses
 - **Three live deploys, not six.** The session contains exactly three `agentcore deploy` calls (Lab 1, Lab 2, Lab 3). Each is paired with a "While this deploys" on-page reading box.
 - **Gateway born with JWT.** `my-gateway` is now created with `--authorizer-type CUSTOM_JWT` on first creation and never recreated. Previously the gateway was created without auth and then replaced with `my-gateway-secure`.
 - **Env-file replaces SSM copy-paste.** Lab 2 opens with `source ~/portfolio-env.sh`, a single command that loads all SSM parameter values into shell variables. Previously, participants ran multiple `aws ssm get-parameter` commands and manually copied ARNs.
-- **One code edit total.** Lab 2 has participants add `import jwt`, an `extract_user_id()` helper, and auth-forwarding to the invoke call. No other Python edits occur anywhere in the session.
+- **Zero code edits.** The agent is a declarative harness (`harness.json`). Lab 2 attaches the Gateway by reference and configures inbound JWT; AgentCore Identity threads the caller's identity to tools, so no auth-forwarding code is written. No Python edits occur anywhere in the session.
 - **Before/after trade demo.** Lab 2 ends with a 5,000-share MSFT trade succeeding (Gateway has no policy). Live Lab 3 ends with the identical trade denied by Cedar policy — without any code change. This is the session's narrative arc.
 - **Old Lab 3 (Security) became self-paced OAuth deep-dive.** The Cognito auth-code flow, M2M client_credentials flow, and token lifecycle content that was the former Lab 3 is now the self-paced "OAuth Token Flows" page (`40-lab3-security`). The live JWT wiring happens in Lab 2.
 - **Old Lab 4 (Governance) is now live Lab 3.** Cedar policies moved from the third hour into the live session. The content directory is still named `50-lab4-governance/` to preserve build history.
 - **Evaluations and VPC Networking are self-paced.** Former Labs 5 and 6 are now self-paced labs participants continue after the 60-minute session.
 - **All Windows/PowerShell tabs removed.** Browser VS Code on Amazon Linux is the only supported environment. The workspace-bundle in `static/workspace-bundle/` delivers the pre-built project to instances.
+
+### 2026-06-11 (later): AgentCore Harness Migration
+
+The workshop was migrated from a hand-written Strands agent (`main.py` + MCP client) to the **AgentCore harness** — a declarative, managed agent runtime (powered by Strands). Impact:
+
+- **The agent is now `app/PortfolioAdvisor/harness.json`** — model, system prompt, tools, and execution limits as config. `main.py`, `mcp_client/`, `model/`, `pyproject.toml`, and `uv.lock` were removed.
+- **Local tools became system-prompt reference data.** The simulated stock and compliance data now lives in the harness system prompt (a documented best practice: bake static content into the prompt instead of a per-call tool round trip). The risk and trade tools remain Gateway Lambda targets.
+- **Lab 1 adds a live model right-sizing beat** (`--model-id` override; Haiku vs Sonnet) — a one-line demo enabled by the harness.
+- **Lab 2 has no code edit.** The Gateway attaches to the harness by reference, and AgentCore Identity threads the caller's identity to tools — replacing the former `extract_user_id()` / auth-forwarding edit.
+- **Model:** the harness defaults to `global.anthropic.claude-sonnet-4-6`. Verify model access for Sonnet 4.6 **and** the Haiku model used in Lab 1's right-sizing beat is enabled in the account template (previously only Sonnet 4.5 was noted — update `prereqs.yaml`/account template accordingly).
+
+> **PREVIEW/GA WARNING:** This migration was authored against the AgentCore harness documentation. Before delivery, every `agentcore` harness command, the `harness.json` schema, and the inbound-auth config block MUST be verified against the GA CLI in a Workshop Studio dry-run. See `HARNESS_MIGRATION.md` at the repo root for the full verification checklist.
 
 ---
 
@@ -107,8 +119,8 @@ The workshop was restructured from a ~3-hour format to a **60-minute builder ses
 | Clock | Duration | Activity | Key Focus and Tips |
 |-------|----------|----------|--------------------|
 | 0:00–0:08 | 8 min | **Facilitator talk** | Front-load: CISO five questions, target architecture diagram, the before/after Cedar arc (5,000-share trade succeeds in Lab 2, denied in Lab 3 without a code change), logistics ("your first command starts a deploy — the page tells you what to read while it runs"). No speaking after this point — facilitators float. |
-| 0:08–0:21 | 13 min | **Lab 1: Deploy to AgentCore Runtime** | Participants run `agentcore deploy` immediately. "While this deploys" box: CISO five questions + code tour. Then: invoke the agent, session-isolation A/B test, one CloudWatch trace. **Tip:** The CDK bootstrap on first deploy adds ~2 min to Lab 1's wait — this is absorbed by the reading box. Point participants to the reading box the moment they start the deploy. |
-| 0:21–0:39 | 18 min | **Lab 2: Connect Tools with Gateway + JWT Auth** | `source ~/portfolio-env.sh` (one paste loads all SSM values), create `my-gateway` with `--authorizer-type CUSTOM_JWT` (never recreated), both Lambda targets, runtime authorizer via python3 heredoc patch, the session's ONE code edit (import jwt + extract_user_id + auth-forwarding invoke), deploy #2. "While this deploys" box: credential patterns + tool schemas. Then: obtain token, bearer invoke, 401 proof, 5,000-share MSFT trade SUCCEEDS (no policy yet). **Tip:** The 401 proof and the succeeding large trade together set up Lab 3's payoff — make sure participants get there. |
+| 0:08–0:21 | 13 min | **Lab 1: Deploy to the AgentCore Harness** | Participants run `agentcore deploy` immediately. "While this deploys" box: CISO five questions + harness.json tour. Then: invoke the agent, right-size the model live (Haiku vs Sonnet), session-isolation A/B test, one CloudWatch trace. **Tip:** The harness image pull on first deploy adds ~2 min to Lab 1's wait — this is absorbed by the reading box. Point participants to the reading box the moment they start the deploy. |
+| 0:21–0:39 | 18 min | **Lab 2: Connect Tools with Gateway + JWT Auth** | `source ~/portfolio-env.sh` (one paste loads all SSM values), create `my-gateway` with `--authorizer-type CUSTOM_JWT` (never recreated), both Lambda targets, attach the gateway to the harness by reference, configure harness inbound JWT (no code edit — Identity threads identity), deploy #2. "While this deploys" box: credential patterns + tool schemas. Then: obtain token, bearer invoke, 401 proof, 5,000-share MSFT trade SUCCEEDS (no policy yet). **Tip:** The 401 proof and the succeeding large trade together set up Lab 3's payoff — make sure participants get there. |
 | 0:39–0:55 | 16 min | **Lab 3 (live): Govern Agent Actions with Cedar Policies** | Policy engine attached to `my-gateway` in ENFORCE mode, 2 Cedar policies (trade_quantity_limit < 1000, portfolio_risk_check permit), deploy #3. "While this deploys" box: Cedar-vs-prompt-rules + policy walkthrough. Then: ✅ 500-share trade passes, ❌ the SAME 5,000-share trade DENIED, ✅ risk check passes, audit record. **Tip:** The denied trade is the workshop's single most impactful moment. Circulate during Lab 3 to make sure participants reach the denial test before time is up. |
 | 0:55–1:00 | 5 min | **Buffer / fast-finisher ladder** | Fast-finisher ladder on the Lab 3 page: (1) add a restricted-ticker Cedar policy → (2) Observability Deep Dive → (3) OAuth Token Flows. Facilitators prompt fast finishers to the ladder rather than letting them sit idle. |
 

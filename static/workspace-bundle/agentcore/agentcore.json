@@ -1,5 +1,4 @@
 {
-  "$schema": "https://schema.agentcore.aws.dev/v1/agentcore.json",
   "name": "PortfolioAdvisor",
   "version": 1,
   "managedBy": "CDK",
@@ -7,15 +6,12 @@
     "agentcore:created-by": "agentcore-cli",
     "agentcore:project-name": "PortfolioAdvisor"
   },
-  "runtimes": [
+  "runtimes": [],
+  "harnesses": [
     {
       "name": "PortfolioAdvisor",
-      "build": "CodeZip",
-      "entrypoint": "main.py",
-      "codeLocation": "app/PortfolioAdvisor/",
-      "runtimeVersion": "PYTHON_3_14",
-      "networkMode": "PUBLIC",
-      "protocol": "HTTP"
+      "configLocation": "app/PortfolioAdvisor/harness.json",
+      "networkMode": "PUBLIC"
     }
   ],
   "memories": [],

@@ -181,7 +181,7 @@ Key observations:
 | `scope` | Pool-level scopes | Resource server scope (e.g. `portfolioadvisor/invoke`) |
 | `client_id` | Web client ID | M2M client ID |
 
-Because the M2M token has no `username` claim, the `extract_user_id()` function in `main.py` (added in Lab 2) falls back to the `sub` claim — which is the M2M client ID. This identity is what flows into Cedar policy evaluation in [Lab 3](../50-lab4-governance/).
+Because the M2M token has no `username` claim, AgentCore Identity threads the `sub` claim — which is the M2M client ID — as the caller identity. This identity is what flows into Cedar policy evaluation in [Lab 3](../50-lab4-governance/).
 
 ---
 

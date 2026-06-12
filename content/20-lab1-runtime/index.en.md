@@ -1,5 +1,5 @@
 ---
-title: "Lab 1: Deploy to AgentCore Runtime"
+title: "Lab 1: Deploy to the AgentCore Harness"
 weight: 20
 ---
 
@@ -7,17 +7,20 @@ weight: 20
 
 ## Overview
 
-Your portfolio advisor agent is pre-built and ready to deploy. In this lab you'll push it to AgentCore Runtime — a fully managed serverless container — verify it responds, and see your first traces in CloudWatch GenAI Observability.
+Your portfolio advisor agent is defined as a **harness** — a declarative configuration, not hand-written orchestration code. In this lab you'll deploy it to AgentCore, verify it responds, right-size the model live, and see your first traces in CloudWatch GenAI Observability.
+
+The AgentCore harness runs the full agent loop for you — reasoning, tool selection, action, response streaming — from a single config file. You declare *what* the agent does (model, instructions, tools); AgentCore provides the runtime, memory, identity, and observability. The harness is powered by [Strands Agents](https://strandsagents.com/).
 
 ### What You're Building
 
 :::code{language=bash showCopyAction=false}
                         ┌─────────────────────────────────────┐
-                        │   AgentCore Runtime  ← THIS LAB     │
+                        │   AgentCore Harness  ← THIS LAB     │
 agentcore invoke ──────▶│                                     │
-                        │   PortfolioAdvisor                  │
-                        │   ├── get_stock_analysis()          │
-                        │   └── get_compliance_rules()        │
+                        │   PortfolioAdvisor (harness.json)   │
+                        │   ├── model: Claude Sonnet 4.6      │
+                        │   ├── system prompt (+ reference)   │
+                        │   └── tools: [] (Gateway added Lab2)│
                         │                                     │
                         │   ──▶ CloudWatch (auto-instrumented)│
                         └─────────────────────────────────────┘
@@ -39,9 +42,9 @@ agentcore deploy -y -v
 
 What `agentcore deploy` does so you don't have to:
 
-- Packages your agent code and dependencies
-- Uploads the package to S3
-- Provisions a serverless AgentCore Runtime (no Dockerfile, ECR, or CloudFormation to write)
+- Reads your `harness.json` and registers the managed harness
+- Provisions the serverless AgentCore environment (no Dockerfile, ECR, or orchestration code to write)
+- Pulls the managed harness image and attaches networking, identity, and observability
 - Creates an invocation endpoint
 - Wires CloudWatch logging and tracing automatically
 
@@ -77,61 +80,46 @@ Self-paced after session:
 
 ---
 
-### Code tour: open `app/PortfolioAdvisor/main.py`
+### How AgentCore runs your agent (session model)
 
-The agent is short. Find these four things:
+AgentCore runs every session in its own isolated microVM. The **first** request on a session pays a one-time startup cost; every later request carrying the same session ID skips it. That single fact drives most agent performance — so the highest-leverage optimization is simply **reusing a session for a unit of work** (a conversation, a batch), not minting a new session per request. You'll prove this isolation firsthand in the A/B test in Step 4.
 
-**Local tools** (simulated data for the workshop):
+Observability is already on. Every invoke emits an OpenTelemetry trace — model calls, tool calls, per-step timing — with no instrumentation from you. That's the start of answering the CISO's Question 3 ("prove what it did").
 
-```python
-def get_stock_analysis(ticker: str) -> dict:
-    ...  # returns price, PE ratio, recommendation
-
-def get_compliance_rules(category: str) -> dict:
-    ...  # returns applicable compliance rules
-```
-
-**System prompt** — defines scope (stock analysis, compliance, portfolio risk, trade execution) and tone (institutional, cite rules).
-
-**`@app.entrypoint` async generator** — the AgentCore Runtime entry point. AgentCore calls this for every invocation and streams back chunks.
-
-**Gateway hook** — look for `get_or_create_agent`:
-
-```python
-gateway_client = get_gateway_mcp_client(auth_header)
-if gateway_client:
-    tools.append(gateway_client)
-```
-
-`get_gateway_mcp_client()` (in `mcp_client/client.py`) looks for a Gateway URL in the environment — for the gateway you'll create in Lab 2, that's `AGENTCORE_GATEWAY_MY_GATEWAY_URL` (the code also checks a legacy `..._SECURE_URL` name first; it's never set in this workshop). No Gateway exists yet, so the lookup returns `None` and the agent runs with local tools only. In Lab 2, you'll create a Gateway and the CLI automatically injects the URL — zero code changes needed. This is environment-driven wiring.
+> **Deep dive (self-paced):** the session model, cold starts, and session reuse are covered in depth in the AgentCore optimization best-practices companion guide and the [Observability Deep Dive](../25-lab1b-observability/).
 
 ---
 
-### Config tour: `agentcore/agentcore.json`
+### Config tour: open `app/PortfolioAdvisor/harness.json`
 
-:::code{language=bash}
-cat agentcore/agentcore.json
+This one file *is* the agent. Find these three things:
+
+**`model`** — `global.anthropic.claude-sonnet-4-6` on Amazon Bedrock. Changing the model is a one-line edit, or a per-invocation override (you'll do this in Step 4). No code, no rebuild.
+
+**`systemPrompt`** — defines the advisor's scope and tone, and carries a compact block of **stock and compliance reference data** directly in the prompt.
+
+:::alert{header="Why is the reference data in the prompt?" type="info"}
+A best practice: **if a tool would return the same static content on every call, put that content in the system prompt instead.** It's faster and cheaper than a tool round trip, and it lets Lab 1 work with zero external tools. The *dynamic* tools — portfolio risk and trade execution — come through the Gateway in Lab 2, because their results change per request and must be governed.
 :::
 
-This is the single source of truth for everything AgentCore manages. Right now it has one entry: the `PortfolioAdvisor` runtime pointing at `app/PortfolioAdvisor/` with `main.py` as the entrypoint. Gateway config, auth config, and Cedar policies will accumulate here in Labs 2–3 via CLI commands — not by editing code.
+**`tools`** — empty for now. In Lab 2 you'll attach the Gateway by reference and its tools appear automatically. **`allowedTools`** is also empty, which you'll use later to restrict the agent to exactly the tools it should have (least privilege).
 
 **Project layout for reference:**
 
 ```
 PortfolioAdvisor/
 ├── agentcore/
-│   ├── agentcore.json              # Single source of truth (runtimes, gateways, policies)
+│   ├── agentcore.json              # Project config (harnesses, gateways, policies)
 │   ├── aws-targets.json            # Deployment targets (account, region)
 │   └── .cli/deployed-state.json    # Tracks deployed ARNs (auto-managed)
 ├── app/
 │   └── PortfolioAdvisor/
-│       ├── main.py                 # Agent: system prompt, local tools, @app.entrypoint
-│       ├── model/load.py           # Model config (Claude Sonnet)
-│       ├── mcp_client/client.py    # Gateway MCP client (env-driven, no edit needed)
-│       ├── tool/*.json             # Tool schemas for Gateway targets (Labs 2–3)
-│       └── pyproject.toml          # Python dependencies (pre-installed)
-└── .venv/                          # Virtual environment (pre-built)
+│       ├── harness.json            # THE agent: model, system prompt, tools, limits
+│       └── tool/*.json             # Tool schemas for Gateway targets (Labs 2–3)
+└── ...
 ```
+
+There is no `main.py`, no orchestration loop, and no MCP client code to maintain. That code is what the managed harness runs for you.
 
 ::::
 
@@ -145,40 +133,69 @@ Check the deploy completed:
 agentcore status
 :::
 
-You should see `PortfolioAdvisor` in `READY` state.
+You should see the `PortfolioAdvisor` harness in `READY` state.
 
 Generate a session ID and run your first invocation:
 
 :::code{language=bash}
 SESSION_ID=$(python3 -c 'import uuid; print(uuid.uuid4())')
 
-agentcore invoke "What's the current analysis for AAPL? Include price, PE ratio, and recommendation." \
-  --session-id $SESSION_ID --stream
+agentcore invoke --harness PortfolioAdvisor \
+  --session-id $SESSION_ID \
+  "What's the current analysis for AAPL? Include price, PE ratio, and recommendation."
 :::
 
-The agent should respond with Apple's stock data — price $178.52, PE ratio 28.4, Buy recommendation.
+The agent should respond with Apple's stock data — price $178.52, PE ratio 28.4, Buy recommendation — answered directly from the reference data in its system prompt.
 
 Try a compliance query in the same session:
 
 :::code{language=bash}
-agentcore invoke "What are the compliance rules for options trading?" \
-  --session-id $SESSION_ID --stream
+agentcore invoke --harness PortfolioAdvisor \
+  --session-id $SESSION_ID \
+  "What are the compliance rules for options trading?"
 :::
 
 ---
 
-## Step 4 — Session isolation A/B test
+## Step 4 — Right-size the model live (no redeploy)
 
-AgentCore gives each session-id its own microVM context. Let's prove it.
+Because the harness makes the model a per-invocation override, you can feel the latency/cost/quality tradeoff in real time — without changing the agent.
+
+First, a narrow extraction-style ask on a small, fast model:
+
+:::code{language=bash}
+agentcore invoke --harness PortfolioAdvisor \
+  --model-id us.anthropic.claude-haiku-4-5-20251001-v1:0 \
+  --session-id $(python3 -c 'import uuid; print(uuid.uuid4())') \
+  "Which sector is JPM in? One word."
+:::
+
+Now the same agent on its default reasoning model for a multi-step ask:
+
+:::code{language=bash}
+agentcore invoke --harness PortfolioAdvisor \
+  --session-id $(python3 -c 'import uuid; print(uuid.uuid4())') \
+  "Compare AAPL and MSFT on valuation and risk, and flag any compliance concerns."
+:::
+
+:::alert{header="Best Practice: right-size the model per role" type="info"}
+One agent, different model per task. Small models are roughly 10–30x cheaper per token and faster — right for classification, extraction, and routing. Reserve premium reasoning models for planning and synthesis. In a multi-agent system you make this choice per specialist, per evaluator, even for memory extraction. The harness even lets you **switch models mid-session** with context preserved. No code, no redeploy — just the model field.
+:::
+
+---
+
+## Step 5 — Session isolation A/B test
+
+AgentCore gives each session ID its own microVM context. Let's prove it.
 
 **Same session — context is remembered:**
 
 :::code{language=bash}
-agentcore invoke "I'm interested in tech stocks" \
-  --session-id $SESSION_ID --stream
+agentcore invoke --harness PortfolioAdvisor --session-id $SESSION_ID \
+  "I'm interested in tech stocks"
 
-agentcore invoke "Compare the two biggest ones" \
-  --session-id $SESSION_ID --stream
+agentcore invoke --harness PortfolioAdvisor --session-id $SESSION_ID \
+  "Compare the two biggest ones"
 :::
 
 The agent compares AAPL and MSFT without you naming them — it remembers the session context.
@@ -188,20 +205,20 @@ The agent compares AAPL and MSFT without you naming them — it remembers the se
 :::code{language=bash}
 NEW_SESSION=$(python3 -c 'import uuid; print(uuid.uuid4())')
 
-agentcore invoke "Compare the two biggest ones" \
-  --session-id $NEW_SESSION --stream
+agentcore invoke --harness PortfolioAdvisor --session-id $NEW_SESSION \
+  "Compare the two biggest ones"
 :::
 
-The agent doesn't know what "the two biggest ones" refers to — because the new session has no prior context. This is microVM-level session isolation: each session-id is a separate execution environment with no shared state.
+The agent doesn't know what "the two biggest ones" refers to — because the new session has no prior context. This is microVM-level session isolation: each session ID is a separate execution environment with no shared state. It's also a security property — one user's session can't read another's.
 
 ---
 
-## Step 5 — One trace in CloudWatch
+## Step 6 — One trace in CloudWatch
 
 View recent logs via CLI:
 
 :::code{language=bash}
-agentcore logs --runtime PortfolioAdvisor --since 10m
+agentcore logs --harness PortfolioAdvisor --since 10m
 :::
 
 For the visual trace view:
@@ -220,20 +237,20 @@ Deeper dive (X-Ray spans, token metrics, session isolation traces, dashboards) i
 
 ---
 
-## Best Practices: Runtime-First Development
+## Best Practices: Declare, Deploy, Observe
 
 :::alert{header="Best Practice" type="info"}
-**Deploy to the cloud on day one, even with a single tool.** Don't wait until the agent is "done."
+**Declare the agent as configuration and deploy to the cloud on day one.** Don't wait until the agent is "done."
 :::
 
-Traditional development runs local until deployment becomes a separate project — exposing IAM, networking, timeout, and quota issues late when they're expensive. Runtime-first flips that:
+The harness model makes this natural: there's no orchestration code to write before you can deploy, and trying a different model or adding a tool is a config change, not a rewrite. Runtime-first development means:
 
-1. **Deploy immediately** — Cloud from day one, even with one tool
-2. **Iterate fast** — `agentcore deploy` takes ~2 minutes for updates; infrastructure already exists after the first deploy
-3. **Observe from the start** — Cold start times, model latency under load, token patterns are invisible locally
+1. **Deploy immediately** — Cloud from day one, even with zero external tools
+2. **Iterate fast** — Change the model, prompt, or tools and redeploy in ~2 minutes; or override per invocation with no deploy at all
+3. **Observe from the start** — Cold start times, model latency under load, and token patterns are invisible locally
 4. **Fail early on integration** — Discover IAM and quota issues when they're still cheap to fix
 
-Use `agentcore dev` for rapid local prompt engineering and tool-logic debugging — but treat it as a supplement, not the primary workflow.
+Use `agentcore dev` for rapid local prompt iteration — but treat it as a supplement, not the primary workflow.
 
 ---
 

@@ -12,7 +12,7 @@ Over the course of this workshop, you deployed a production-ready portfolio advi
 | Lab | What You Did | AgentCore Services |
 |-----|-------------|-------------------|
 | Foundations | Learned agent planning, observability strategy, "no code changes" philosophy | (reading — no services) |
-| Lab 1: Deploy to AgentCore Runtime | Deployed pre-built agent to cloud | AgentCore Runtime |
+| Lab 1: Deploy to the AgentCore Harness | Deployed declarative harness; right-sized the model live | AgentCore Harness (Runtime) |
 | Lab 2: Connect Tools with Gateway + JWT Auth | Centralized tools via Gateway with JWT authentication and IAM credential patterns | AgentCore Gateway + Identity |
 | Lab 3: Govern Agent Actions with Cedar Policies | Added Cedar policies for trade limits and restricted tickers, explored agentic explainability | AgentCore Policy |
 
@@ -31,11 +31,11 @@ Over the course of this workshop, you deployed a production-ready portfolio advi
 
 ## Key Takeaways
 
-**The AgentCore CLI abstracts infrastructure complexity.** You never wrote a Dockerfile, configured an ECR repository, or manually created IAM roles. A single `agentcore deploy` handled packaging, uploading, provisioning, and wiring everything together.
+**The AgentCore CLI abstracts infrastructure complexity.** You never wrote a Dockerfile, an agent orchestration loop, an ECR repository, or manually created IAM roles. You declared the agent in `harness.json`, and a single `agentcore deploy` handled provisioning, wiring, and observability.
 
 **Gateway centralizes tool access.** Organizations already have valuable business logic in Lambda functions and APIs. Gateway lets you MCPify them — exposing them as discoverable, authenticated tools — without changing the original code.
 
-**Security is a configuration change, not a rewrite.** Adding Cognito JWT authentication to both Runtime and Gateway required a few fields in `agentcore.json` and one helper function in agent code. The same pattern works with any OAuth 2.0 compliant identity provider.
+**Security is a configuration change, not a rewrite.** Adding Cognito JWT authentication to both the harness and the Gateway required a few config fields — and zero agent code, because AgentCore Identity threads the caller's identity to tools for you. The same pattern works with any OAuth 2.0 compliant identity provider.
 
 **Governance belongs outside the agent.** AgentCore Policy enforces business rules at the Gateway boundary using Cedar policies — deterministically, outside agent code. The agent can't bypass them, and every decision is logged for audit.
 
