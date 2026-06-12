@@ -109,7 +109,7 @@ agentcore add policy \
   --name portfolio_risk_check_policy \
   --engine PortfolioAdvisorPolicyEngine \
   --description "Allow all authenticated users to check portfolio risk" \
-  --statement "permit(principal, action == AgentCore::Action::\"PortfolioRiskCheck___check_portfolio_risk\", resource == AgentCore::Gateway::\"${GATEWAY_ARN}\") when { (principal is AgentCore::OAuthUser) };" \
+  --statement "permit(principal, action == AgentCore::Action::\"PortfolioRiskCheck___check_portfolio_risk\", resource == AgentCore::Gateway::\"${GATEWAY_ARN}\");" \
   --validation-mode IGNORE_ALL_FINDINGS
 ```
 
@@ -173,11 +173,11 @@ permit(
   principal,
   action == AgentCore::Action::"PortfolioRiskCheck___check_portfolio_risk",
   resource == AgentCore::Gateway::"<your-gateway-arn>"
-) when { (principal is AgentCore::OAuthUser) };
+);
 :::
 
-- `principal is AgentCore::OAuthUser` — matches any user who authenticated via OAuth/JWT (your Cognito user)
-- There is no `when` condition on the tool inputs — all risk checks are permitted regardless of portfolio ID
+- `principal` — unconstrained: any caller the Gateway authenticates. In this workshop the harness reaches the Gateway with an **M2M token**, so the principal Cedar sees is the harness's machine client, not the end user (the end-user JWT is validated at the harness inbound layer)
+- There is no `when` condition — all risk checks are permitted
 - Because Cedar defaults to deny, this explicit permit is what keeps `check_portfolio_risk` working after the policy engine is attached
 
 **What is NOT permitted:** Everything else. Any tool call that doesn't match one of these two permits is blocked. If you added a third Lambda tool to the Gateway tomorrow, it would be silently denied until you wrote a policy for it.
@@ -257,7 +257,7 @@ User: "Buy 5000 shares of MSFT"
     ↓
 Agent decides to call execute_trade(ticker="MSFT", quantity=5000, ...)
     ↓
-Harness sends the tool request to Gateway (caller identity threaded by Identity)
+Harness sends the tool request to Gateway (authenticated with an M2M token)
     ↓
 Gateway → Policy Engine evaluates Cedar policies
     ↓
@@ -298,7 +298,7 @@ Policy decisions are logged at the Gateway. Each entry contains:
 | `decision` | `DENY` |
 | `matchingPolicy` | `trade_quantity_limit` |
 | `context.input` | `{"ticker": "MSFT", "quantity": 5000, ...}` |
-| `principal` | `workshopuser@example.com` |
+| `principal` | M2M client the harness presented (end user logged at harness inbound) |
 
 ### Constructing an Audit Record
 
@@ -307,7 +307,8 @@ Join the agent trace with the policy log on `traceId` for a complete per-transac
 :::code{language=bash showCopyAction=false}
 Audit Record for Trade Attempt:
 ├── Timestamp: 2025-01-15T14:23:07Z
-├── User: workshopuser@example.com (via JWT sub claim)
+├── End user (harness inbound JWT): workshopuser@example.com
+├── Gateway principal (M2M token): harness machine client
 ├── Agent Decision: Call execute_trade with quantity=5000, ticker=MSFT
 ├── Policy Evaluation: DENY (matched policy: trade_quantity_limit)
 ├── Reason: quantity 5000 >= 1000 (exceeds per-trade limit)

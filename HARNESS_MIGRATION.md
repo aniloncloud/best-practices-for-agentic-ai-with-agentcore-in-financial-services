@@ -155,3 +155,57 @@ Labs 2–3's gateway/Cedar mechanics are now **validated at the API/CLI level** 
 are correct regardless of harness. The harness-specific layer (Lab 1 deploy, Lab 2 attach + auth,
 the zero-code claim) remains authored-from-docs and unverified; the AgentCore MCP cannot close
 that gap. A GA-CLI dry-run in a Workshop Studio event is still required (checklist items 1, 2, 3, 6).
+
+---
+
+## Validation against official harness CODE SAMPLES (2026-06-11)
+
+Validated against the real harness samples at
+`amazon-bedrock-agentcore-samples-1/06-workshops/11-AgentCore-harness`
+(getting-started CLI.md, 02-gateway-integration, 03-execution-limits, 07-oauth).
+These are authoritative — they call the live `create_harness`/`invoke_harness` APIs.
+
+### CONFIRMED — migration was correct
+- ✅ `agentcore invoke --harness <name> "<prompt>"` — Lab 1/2/3 invokes are right.
+- ✅ Model config `model={"bedrockModelConfig": {"modelId": ...}}` — harness.json matches.
+- ✅ Haiku ID `us.anthropic.claude-haiku-4-5-20251001-v1:0` is REAL (used in the OAuth sample) —
+  Lab 1's right-sizing beat is valid, not a placeholder.
+- ✅ Gateway tool shape `{"type":"agentcore_gateway","name":...,"config":{"agentCoreGateway":{...}}}`.
+- ✅ Inbound auth key `customJWTAuthorizer` (uppercase) — earlier casing fix confirmed.
+- ✅ Default tools `shell` + `file_operations` — confirms the `allowedTools` hardening note.
+- ✅ Gateway `add gateway` / `add gateway-target` CLI and triple-underscore naming.
+
+### CORRECTED — migration was WRONG, now fixed
+- ❌→✅ **`systemPrompt` is a list of `{"text": ...}` blocks, not a string.** Fixed harness.json.
+- ❌→✅ **THE BIG ONE — outbound auth is M2M client-credentials, NOT end-user identity threading.**
+  The OAuth sample shows: end-user JWT authenticates *inbound* to the harness; the harness then
+  fetches a *separate M2M token* (from an OAuth2 credential provider, `outboundAuth.oauth`,
+  `grantType: CLIENT_CREDENTIALS`) to call the Gateway. **The end-user identity does NOT reach
+  the Gateway/Lambda/Cedar.** My Lab 2 (Step 6) and Lab 3 (Policy 2 `principal is OAuthUser`,
+  audit record principal) falsely claimed end-user threading. CORRECTED:
+    - Lab 2 now: gateway allows the M2M client+scope; Step 4 registers an OAuth2 credential
+      provider; Step 5 attaches the gateway tool with `--outbound-auth oauth`; Step 6 sets
+      inbound JWT for the web client. The "zero code edit" claim is preserved (harness handles
+      token exchange) but reframed accurately as M2M, with an OBO pointer for true per-user.
+    - Lab 3: Policy 2 is now principal-agnostic; audit record shows BOTH the end user (harness
+      inbound) and the M2M gateway principal. The quantity-limit denial (the finale) is
+      principal-agnostic and unaffected.
+- ❌→✅ **Inbound auth lives at top-level `authorizerConfiguration`** (a `create_harness` field),
+  not `config.inboundAuth`. Fixed Lab 2 Step 6 heredoc.
+- ❌→✅ **Execution limits (`maxIterations`/`timeoutSeconds`/`maxTokens`) are invoke-time params**,
+  not harness.json fields (and the name is `timeoutSeconds`, not `harnessTimeoutSeconds`).
+  Removed the `executionLimits` block from harness.json.
+- ❌→✅ **CLI install is `npm i -g @aws/agentcore@preview`** (CLI.md), not `@aws/agentcore-cli`.
+  Fixed facilitator guide.
+
+### STILL UNVERIFIED (need a dry-run with the GA CLI)
+- The exact **CLI** surface for: setting harness inbound auth and outbound tool auth via flags vs.
+  editing `harness.json` (samples use the boto3 `create_harness` API, not the CLI, for these).
+  My Lab 2 Steps 5–6 express them as `agentcore add tool --outbound-auth ...` and a harness.json
+  patch — the precise CLI flags/JSON keys must be confirmed against the GA CLI.
+- The `agentcore.json` `harnesses` array representation (samples create harnesses via API, and
+  CLI.md uses `agentcore create --model-provider`, which generates the project).
+- Whether the M2M **client secret** is retrievable as written (Lab 2 Step 4 uses
+  `describe-user-pool-client`; the workshop's M2M client must expose `client_credentials` + scope).
+- Model: harness default `global.anthropic.claude-sonnet-4-6` vs. prereqs "Sonnet 4.5".
+- Full end-to-end timing + the before/after trade, in a Workshop Studio dry-run.

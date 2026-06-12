@@ -217,7 +217,7 @@ Participants continue these at their own pace after the 60-minute session ends. 
 
 **Fix:**
 - Verify: `agentcore --version`
-- Install if missing: `npm install -g @aws/agentcore-cli` (check the Workshop Studio environment's pre-installed CLI version)
+- Install if missing: `npm i -g @aws/agentcore@preview` (the harness requires the preview AgentCore CLI; check the Workshop Studio environment's pre-installed version)
 - If the VS Code Server terminal does not pick up the PATH change, close and reopen the terminal tab.
 
 #### 4. Gateway Timeout After VPC Deployment (Lab 6)

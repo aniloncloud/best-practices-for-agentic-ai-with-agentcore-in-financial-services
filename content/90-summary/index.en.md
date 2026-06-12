@@ -35,7 +35,7 @@ Over the course of this workshop, you deployed a production-ready portfolio advi
 
 **Gateway centralizes tool access.** Organizations already have valuable business logic in Lambda functions and APIs. Gateway lets you MCPify them — exposing them as discoverable, authenticated tools — without changing the original code.
 
-**Security is a configuration change, not a rewrite.** Adding Cognito JWT authentication to both the harness and the Gateway required a few config fields — and zero agent code, because AgentCore Identity threads the caller's identity to tools for you. The same pattern works with any OAuth 2.0 compliant identity provider.
+**Security is a configuration change, not a rewrite.** Adding Cognito JWT authentication required a few config fields — and zero agent code: inbound JWT controls who can call the agent, and the harness fetches an M2M token to call the Gateway for you. The same pattern works with any OAuth 2.0 compliant identity provider.
 
 **Governance belongs outside the agent.** AgentCore Policy enforces business rules at the Gateway boundary using Cedar policies — deterministically, outside agent code. The agent can't bypass them, and every decision is logged for audit.
 

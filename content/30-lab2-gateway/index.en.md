@@ -13,26 +13,25 @@ In this lab you'll do three things in one deploy:
 
 1. Create a Gateway **with JWT authentication from the start** — no unauthenticated window
 2. Register two Lambda tools (portfolio risk check and trade execution) and attach the Gateway to the harness
-3. Secure the harness with the same Cognito authorizer — **with zero agent code**, because AgentCore Identity threads the caller's identity to the tools for you
+3. Secure the harness with inbound JWT, and configure outbound M2M auth so the harness authenticates to the Gateway — **with zero agent code**, because the harness fetches and exchanges tokens for you
 
 You'll end with a 5,000-share trade that goes through. Remember it — Lab 3 will stop it.
 
 ### What You're Building
 
 :::code{language=bash showCopyAction=false}
-User (Cognito JWT)
-    ↓ Bearer token
+End user (Cognito web-client JWT)
+    ↓ Bearer token  —  inbound auth: who can call the agent
 AgentCore Harness (PortfolioAdvisor)  ← JWT required  ← THIS LAB
     │   model + system prompt (reference data)
-    │   Identity threads the caller's identity ──┐  (no forwarding code)
-    └── Gateway tool (by reference)              │
-              ↓                                  │
-    AgentCore Gateway (my-gateway)    ← JWT required  ← THIS LAB
+    └── Gateway tool  —  outbound auth: harness fetches an M2M token
+              ↓            from a credential provider (no forwarding code)
+    AgentCore Gateway (my-gateway)    ← validates M2M token  ← THIS LAB
          ├── PortfolioRiskCheck → Lambda: workshop-check-portfolio-risk
-         └── ExecuteTrade       → Lambda: workshop-execute-trade  (identity flows through)
+         └── ExecuteTrade       → Lambda: workshop-execute-trade
 :::
 
-Both the harness and the Gateway now independently require a valid Cognito token, and the end user's identity is available at the Lambda — you know **who** is calling at every hop, without writing identity-forwarding code.
+Both the harness and the Gateway independently require a valid token: an end-user JWT to call the agent (inbound), and an M2M token that the harness fetches automatically to call the Gateway (outbound). No token-handling code anywhere.
 
 ---
 
@@ -74,7 +73,8 @@ Run `source ~/portfolio-env.sh` again. Labs 2 and 3 both rely on these variables
 agentcore add gateway --name my-gateway \
   --authorizer-type CUSTOM_JWT \
   --discovery-url $COGNITO_DISCOVERY_URL \
-  --allowed-clients $COGNITO_CLIENT_ID,$COGNITO_WEB_CLIENT_ID
+  --allowed-clients $COGNITO_CLIENT_ID \
+  --allowed-scopes $COGNITO_SCOPE
 ```
 
 You should see:
@@ -83,7 +83,7 @@ You should see:
 Added gateway 'my-gateway'
 :::
 
-`--discovery-url` tells the Gateway where to fetch Cognito's signing keys (the OIDC `/.well-known/openid-configuration` endpoint). `--allowed-clients` restricts access to only these two Cognito app clients — tokens issued for any other client are rejected outright.
+`--discovery-url` tells the Gateway where to fetch Cognito's signing keys (the OIDC `/.well-known/openid-configuration` endpoint). The Gateway is reached by the **harness using a machine-to-machine (M2M) token**, so `--allowed-clients` is the M2M app client and `--allowed-scopes` is the gateway scope — tokens for any other client or scope are rejected outright.
 
 In production you would never create a gateway unauthenticated even temporarily. We don't here either.
 
@@ -117,63 +117,80 @@ The Lambda functions themselves are unchanged — the Gateway MCPifies them, mak
 
 ---
 
-## Step 4: Attach the Gateway to the Harness (by reference)
+## Step 4: Register an Outbound Credential Provider (M2M)
 
-The harness gains the Gateway's tools by referencing the gateway — no MCP client code, no wiring:
+The harness calls the Gateway as a machine, using a Cognito M2M (client-credentials) token. Register that credential once in **AgentCore Identity** so the harness can fetch and refresh the token automatically — the secret lives in the Token Vault, never in your config or code:
+
+```bash
+agentcore add credential \
+  --name my-gateway-m2m \
+  --type oauth \
+  --discovery-url $COGNITO_DISCOVERY_URL \
+  --client-id $COGNITO_CLIENT_ID \
+  --client-secret "$(aws cognito-idp describe-user-pool-client --user-pool-id $COGNITO_POOL_ID --client-id $COGNITO_CLIENT_ID --query 'UserPoolClient.ClientSecret' --output text)"
+```
+
+This creates an OAuth2 credential provider. You'll reference its ARN when you attach the Gateway tool in the next step.
+
+```bash
+CRED_ARN=$(aws bedrock-agentcore-control get-oauth2-credential-provider \
+  --name my-gateway-m2m --query 'credentialProviderArn' --output text)
+echo "Credential provider: $CRED_ARN"
+```
+
+---
+
+## Step 5: Attach the Gateway to the Harness (with outbound M2M auth)
+
+The harness gains the Gateway's tools by referencing the gateway — no MCP client code, no wiring. The `outbound-auth` flags tell the harness to authenticate to the Gateway with the M2M credential from Step 4:
 
 ```bash
 agentcore add tool --harness PortfolioAdvisor \
   --type agentcore_gateway \
   --name my-gateway \
-  --gateway my-gateway
+  --gateway my-gateway \
+  --outbound-auth oauth \
+  --credential-arn $CRED_ARN \
+  --scopes $COGNITO_SCOPE
 ```
 
-Every tool configured on `my-gateway` (both Lambda targets) now becomes available to the agent. Confirm it landed in `harness.json`:
+Confirm it landed in `harness.json`:
 
 ```bash
 cat app/PortfolioAdvisor/harness.json
 ```
 
-You'll see a `tools` entry of type `agentcore_gateway` pointing at `my-gateway`.
+You'll see a `tools` entry of type `agentcore_gateway` whose `config.agentCoreGateway` has the `gatewayArn` plus an `outboundAuth.oauth` block (`providerArn`, `scopes`, `grantType: CLIENT_CREDENTIALS`). On every tool call the harness fetches an M2M token from the credential provider and presents it to the Gateway.
 
 ---
 
-## Step 5: Secure the Harness with the Same Authorizer
+## Step 6: Secure the Harness Inbound (who can call the agent)
 
-Configure inbound JWT on the harness so callers must present a valid Cognito token. This is a **configuration change** — patch `harness.json`, no agent code:
+Now configure inbound JWT so only authenticated **end users** (the Cognito web client) can invoke the harness. This is the harness `authorizerConfiguration` — a configuration change, no agent code:
 
 ```bash
 python3 - <<'EOF'
 import json, os
 p = "app/PortfolioAdvisor/harness.json"
 cfg = json.load(open(p))
-cfg["config"]["inboundAuth"] = {
-    "authorizerType": "CUSTOM_JWT",
+cfg["authorizerConfiguration"] = {
     "customJWTAuthorizer": {
         "discoveryUrl": os.environ["COGNITO_DISCOVERY_URL"],
-        "allowedClients": [os.environ["COGNITO_CLIENT_ID"], os.environ["COGNITO_WEB_CLIENT_ID"]],
-    },
+        "allowedClients": [os.environ["COGNITO_WEB_CLIENT_ID"]],
+    }
 }
 json.dump(cfg, open(p, "w"), indent=2)
-print("Harness inbound JWT configured.")
+print("Harness inbound JWT configured (web client = end users).")
 EOF
 ```
 
-Same `discoveryUrl` and `allowedClients` as the Gateway — one Cognito pool secures both endpoints.
-
----
-
-## Step 6: No Code Edit — Identity Threads the Caller Through
-
-::::alert{header="This is the step that used to be a code edit" type="info"}
-In a hand-written agent, this is where you'd add `import jwt`, an `extract_user_id()` helper, and code to forward the `Authorization` header to the Gateway on every call. **On the harness, you write none of it.**
-
-When the harness has inbound OAuth configured (Step 5), **AgentCore Identity threads the end-user identity through to the Gateway tools automatically.** A tool call to `execute_trade` carries the caller's identity without any forwarding code — which is exactly what Lab 3's Cedar policies will evaluate.
-
-The result: across this entire live session there are **zero agent code edits**. Production hardening is configuration, not code.
+::::alert{header="No code edit — the harness handles token exchange" type="info"}
+In a hand-written agent, this is where you'd add `import jwt`, an `extract_user_id()` helper, and code to fetch an M2M token and attach it to every Gateway call. **On the harness, you write none of it.** The `outboundAuth.oauth` config (Step 5) tells the harness to fetch and refresh the M2M token from the Token Vault automatically. Across this entire live session there are **zero agent code edits** — production hardening is configuration, not code.
 ::::
 
-> **Note:** Per-user identity threading uses the Bearer JWT inbound path (what you configured). It is not available when callers authenticate with SigV4 (IAM) — see the self-paced [OAuth Token Flows](../40-lab3-security/) lab for the credential-pattern details.
+:::alert{header="Two tokens, two jobs" type="info"}
+**Inbound** (this step): an end-user web-client JWT controls *who can call the agent*. **Outbound** (Step 5): the harness presents an *M2M* token to the Gateway — that is the identity the Gateway validates and that Cedar evaluates in Lab 3. The end-user JWT is not forwarded to the Gateway in this pattern. Threading the *end-user* identity all the way to tools is a separate on-behalf-of (OBO) flow — see the self-paced [OAuth Token Flows](../40-lab3-security/) lab.
+:::
 
 ---
 
@@ -199,13 +216,13 @@ This is your **second deploy** (first was Lab 1) and the last one until Lab 3. W
 
 ### Where credentials live
 
-Notice what you did *not* do: you didn't paste a secret into the agent, and you didn't write code to forward the user's identity. Three credential patterns exist; the harness with inbound OAuth uses identity threading for you.
+Notice what you did *not* do: you didn't paste a secret into the agent, and you didn't write code to fetch or attach tokens. Three credential patterns exist; this lab uses M2M outbound — the harness fetches the Gateway token from a credential provider for you.
 
 | Pattern | How It Works | Best For |
 |---------|-------------|----------|
 | **IAM Service Credential** | Caller signs requests with SigV4 | Service-to-service; no user context needed |
-| **JWT inbound + Identity threading** | Caller presents a Cognito JWT; Identity threads the user to tools | Per-user policies; user identity needed downstream |
-| **Workload Identity (OBO)** | A user token is exchanged for a scoped workload token | Multi-agent chains; third-party API OAuth exchange |
+| **M2M outbound (this lab)** | Harness fetches a client-credentials token from a credential provider to call the Gateway | Agent→gateway/tool auth without per-user scoping |
+| **Workload Identity (OBO)** | A user token is exchanged for a scoped workload token so the end-user identity reaches the tool | Per-user authorization/audit at the tool |
 
 The pattern to remember: credentials are injected **at the edge** (Gateway / Identity), never held in the agent process. A secret the agent never holds can't leak through a log line, a traceback, or a prompt-injection attempt. That's why "add auth" was a config change, not a code change.
 
@@ -299,14 +316,14 @@ In Lab 3 you'll attach a Cedar policy engine to the Gateway and run this exact p
 
 ## What Just Happened?
 
-You created a Gateway with JWT authentication enabled from day one, registered two Lambda tools, attached the Gateway to the harness by reference, configured the same inbound authorizer on the harness, and deployed once. Critically, you wrote **no agent code** — AgentCore Identity threads the caller's identity to the tools. The token flow is:
+You created a Gateway with JWT authentication enabled from day one, registered two Lambda tools, registered an M2M credential provider, attached the Gateway to the harness with outbound M2M auth, configured inbound JWT on the harness, and deployed once. Critically, you wrote **no agent code** — the harness fetches and exchanges tokens for you. The token flow is:
 
 ```
-User → Cognito (authenticate) → JWT access token
-JWT → Harness (validate: signature + expiry + audience + issuer)
-Identity → threads end-user identity to Gateway tools (no forwarding code)
-JWT/identity → Gateway (validate again, independently)
-Gateway → Lambda (user identity available for policy + audit)
+End user → Cognito web client (authenticate) → JWT access token
+JWT → Harness (validates inbound: signature + expiry + audience + issuer)
+Agent decides to call a tool → Harness fetches an M2M token from the credential provider
+M2M token → Gateway (validates inbound, independently)
+Gateway → Lambda (via its IAM role)
 ```
 
 ---

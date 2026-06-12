@@ -113,7 +113,7 @@ Business rules don't belong in prompts. A prompt can be manipulated; a Cedar pol
 
 ### Zero Code Changes for Production Hardening
 
-The agent is a declarative **harness** (`harness.json`) — model, system prompt, and tools as configuration, with no orchestration code to write or maintain. Authentication (Lab 2), governance (Lab 3), evaluations, and VPC isolation are all **configuration changes**. Across the entire live session there are **zero agent code edits** — even identity forwarding to tools is handled for you by AgentCore Identity. Gateway tools attach by reference. Platform teams own the guardrails; agent teams own the logic.
+The agent is a declarative **harness** (`harness.json`) — model, system prompt, and tools as configuration, with no orchestration code to write or maintain. Authentication (Lab 2), governance (Lab 3), evaluations, and VPC isolation are all **configuration changes**. Across the entire live session there are **zero agent code edits** — even outbound tool authentication is handled for you: the harness fetches and refreshes the Gateway's M2M token automatically. Gateway tools attach by reference. Platform teams own the guardrails; agent teams own the logic.
 
 ---
 
