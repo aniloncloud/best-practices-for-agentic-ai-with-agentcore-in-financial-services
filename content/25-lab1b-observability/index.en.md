@@ -1,9 +1,15 @@
 ---
-title: "Lab 1B: Observability Deep Dive"
-weight: 25
+title: "Observability Deep Dive"
+weight: 50
 ---
 
 **⏱️ Estimated time: ~15 minutes**
+
+:::alert{header="Self-paced lab" type="info"}
+Do this after the live session — **your event account stays live**, so you can continue later today. If you're in a new terminal, run `source ~/portfolio-env.sh` to reload your environment variables.
+
+**Prerequisites:** Lab 1 (Deploy to AgentCore Runtime)
+:::
 
 ## Overview
 
@@ -84,67 +90,30 @@ Sessions are isolated — context in one session doesn't leak to another. This i
 
 **Start Session A:**
 
-::::tabs{variant="container" groupId="os"}
-:::tab{label="macOS/Linux"}
-```bash
+:::code{language=bash}
 SESSION_A=$(python3 -c 'import uuid; print(uuid.uuid4())')
 
 agentcore invoke "My name is Sarah and I'm interested in analyzing TSLA for a large position" \
   --session-id $SESSION_A --stream
-```
 :::
-:::tab{label="Windows"}
-```powershell
-$SESSION_A = [guid]::NewGuid().ToString()
-
-agentcore invoke "My name is Sarah and I'm interested in analyzing TSLA for a large position" `
-  --session-id $SESSION_A --stream
-
-```
-:::
-::::
 
 **Verify Session A has context:**
 
-::::tabs{variant="container" groupId="os"}
-:::tab{label="macOS/Linux"}
-```bash
+:::code{language=bash}
 agentcore invoke "What stock was I asking about?" \
   --session-id $SESSION_A --stream
-```
 :::
-:::tab{label="Windows"}
-```powershell
-agentcore invoke "What stock was I asking about?" `
-  --session-id $SESSION_A --stream
-
-```
-:::
-::::
 
 Expected: The agent remembers TSLA — it has conversation history within Session A.
 
 **Start Session B (completely separate):**
 
-::::tabs{variant="container" groupId="os"}
-:::tab{label="macOS/Linux"}
-```bash
+:::code{language=bash}
 SESSION_B=$(python3 -c 'import uuid; print(uuid.uuid4())')
 
 agentcore invoke "What stock was I asking about?" \
   --session-id $SESSION_B --stream
-```
 :::
-:::tab{label="Windows"}
-```powershell
-$SESSION_B = [guid]::NewGuid().ToString()
-
-agentcore invoke "What stock was I asking about?" `
-  --session-id $SESSION_B --stream
-
-```
-:::
-::::
 
 Expected: The agent does NOT know — Session B is a completely independent conversation with no context from Session A.
 
@@ -154,37 +123,24 @@ In a multi-client deployment:
 - Client A's portfolio discussions cannot appear in Client B's session
 - Each session runs in its own microVM — hardware-level isolation
 - Session IDs map 1:1 to user sessions (one user, one session)
-- No shared state between sessions unless explicitly wired through Memory (Optional Lab 7)
+- No shared state between sessions unless explicitly wired through Memory (Optional Memory lab)
 
 ## Step 3: Examine Tool Call Traces
 
 Send a multi-tool query and observe how the agent selects tools:
 
-::::tabs{variant="container" groupId="os"}
-:::tab{label="macOS/Linux"}
-```bash
+:::code{language=bash}
 SESSION_TRACE=$(python3 -c 'import uuid; print(uuid.uuid4())')
 
-agentcore invoke "I want to buy 200 shares of TSLA. What's the current risk profile and what compliance rules apply for equity trades?" \
+agentcore invoke "I want to buy 200 shares of TSLA. What's the current risk profile and what compliance rules apply for margin trading?" \
   --session-id $SESSION_TRACE --stream
-```
 :::
-:::tab{label="Windows"}
-```powershell
-$SESSION_TRACE = [guid]::NewGuid().ToString()
-
-agentcore invoke "I want to buy 200 shares of TSLA. What's the current risk profile and what compliance rules apply for equity trades?" `
-  --session-id $SESSION_TRACE --stream
-
-```
-:::
-::::
 
 In the trace, you'll see two tool execution spans:
 1. `get_stock_analysis("TSLA")` — risk level, analyst rating
-2. `get_compliance_rules("equity")` — order limits, settlement, restrictions
+2. `get_compliance_rules("margin_trading")` — leverage limits, approval level, restrictions
 
-The agent selected both tools because the query asked about both risk and compliance. This tool selection decision is what the `ToolSelectionAccuracy` evaluator measures in Lab 5.
+The agent selected both tools because the query asked about both risk and compliance. This tool selection decision is what the `ToolSelectionAccuracy` evaluator measures in the Evaluations lab.
 
 ### View the trace detail:
 
@@ -269,7 +225,7 @@ You explored the observability data that AgentCore captures automatically for ev
 |-------|---------|-----------------|
 | **Traces** | Debug individual invocations | When a user reports a bad response |
 | **Dashboards** | Monitor aggregate health | Every day — is the agent performing normally? |
-| **Evaluations** | Measure quality over time | Before and after every change (Lab 5) |
+| **Evaluations** | Measure quality over time | Before and after every change (Evaluations lab) |
 
 **What to monitor in production:**
 
@@ -295,6 +251,6 @@ If your organization uses Datadog, Dynatrace, Splunk, or LangSmith, CloudWatch t
 
 ### What's Next
 
-In Lab 2, you'll connect your agent to centralized tools via AgentCore Gateway — adding portfolio risk assessment and trade execution without changing your agent's core code.
+You've now seen the full observability story behind the agent you hardened in the live session. Keep going with the other self-paced labs:
 
-→ Next: [Lab 2: Centralize Tools with Gateway](../30-lab2-gateway/)
+→ Continue with: [Enterprise Tool Registry](../35-lab2b-tool-registry/) | [Evaluations](../60-lab5-evaluations/) | [VPC Networking](../70-lab6-vpc/)

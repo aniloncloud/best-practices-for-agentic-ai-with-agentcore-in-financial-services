@@ -1,494 +1,256 @@
 ---
-title: "Lab 3: Secure with JWT Authentication"
-weight: 42
+title: "OAuth Token Flows: M2M & Token Lifecycle"
+weight: 55
 ---
 
-**⏱️ Estimated time: ~20 minutes**
+**⏱️ ~20 minutes (self-paced)**
+
+:::alert{header="Self-paced lab" type="info"}
+Do this **after the live session** — your event account stays live. Prerequisites: Labs 1–3. If you're in a new terminal, run `source ~/portfolio-env.sh` first.
+:::
 
 ## Overview
 
-Authentication answers "who is calling?" — and you need it on both endpoints. Runtime and Gateway are independent HTTPS endpoints: securing only one leaves the other open. In this lab you apply a Cognito JWT authorizer to both, demonstrate two OAuth 2.0 flows, and propagate the token from Runtime to Gateway automatically.
+In Lab 2 you secured both the AgentCore Runtime and the Gateway with a Cognito JWT authorizer using the **resource-owner-password** flow — a human user authenticates with a username and password and the resulting token identifies that person in every request.
 
-### What You're Building
+This deep dive covers the **other** half of the OAuth 2.0 picture:
 
-:::code{language=bash showCopyAction=false}
-┌─────────────────────────────────────────────────────────────────┐
-│  OAuth 2.0 Flows  ← THIS LAB                                   │
-│                                                                 │
-│  User (password grant)         Service (client_credentials)     │
-│       │                               │                         │
-│       ▼                               ▼                         │
-│  Cognito User Pool ──────────── Cognito User Pool               │
-│       │                               │                         │
-│       └──── JWT access token ─────────┘                         │
-└─────────────────────────────────────────────────────────────────┘
-                         │
-                         ▼
-         AgentCore Runtime (JWT required)  ← secured
-                         │
-                         │ forwards token
-                         ▼
-         AgentCore Gateway (JWT required)  ← secured
-                         ├── PortfolioRiskCheck → Lambda
-                         └── ExecuteTrade → Lambda
-:::
+- The **client_credentials** (machine-to-machine) grant — no username, no password, no human in the loop.
+- How to inspect the token claims to understand the difference.
+- Token **lifecycle management** patterns for production systems — proactive refresh, never-embed rules, and key rotation.
 
 ### OAuth 2.0 Grant Types
 
 AgentCore Runtime validates standard JWT tokens — it doesn't care which OAuth flow produced them. Your Cognito setup supports two:
 
 | Grant Type | Use Case | Who Has It |
-|-----------|----------|------------|
+|---|---|---|
 | **Resource Owner Password** (`USER_PASSWORD_AUTH`) | Human users — interactive login with username/password | Test user: `workshopuser@example.com` |
 | **Client Credentials** (`client_credentials`) | Machine-to-machine — CI pipelines, other agents, batch jobs | M2M client: pre-provisioned |
 
-Both produce a JWT access token. Both work with the same `authorizerConfiguration`. The difference is **who** the token represents — a human or a service.
+Both produce a JWT access token. Both work with the same `authorizerConfiguration`. The difference is **who** the token represents — a human user or a service identity.
 
-## Step 1: Retrieve Cognito Configuration
+### What You're Exploring
 
-The prerequisites stack stored all Cognito values in SSM Parameter Store. Retrieve them now:
-
-::::tabs{variant="container" groupId="os"}
-:::tab{label="macOS/Linux"}
-```bash
-COGNITO_DISCOVERY_URL=$(aws ssm get-parameter \
-  --name /app/portfolioadvisor/agentcore/cognito_discovery_url \
-  --query 'Parameter.Value' --output text)
-
-COGNITO_CLIENT_ID=$(aws ssm get-parameter \
-  --name /app/portfolioadvisor/agentcore/client_id \
-  --query 'Parameter.Value' --output text)
-
-COGNITO_WEB_CLIENT_ID=$(aws ssm get-parameter \
-  --name /app/portfolioadvisor/agentcore/web_client_id \
-  --query 'Parameter.Value' --output text)
-
-echo "Discovery URL: $COGNITO_DISCOVERY_URL"
-echo "Client IDs:    $COGNITO_CLIENT_ID  $COGNITO_WEB_CLIENT_ID"
-```
-:::
-:::tab{label="Windows"}
-```powershell
-$COGNITO_DISCOVERY_URL = aws ssm get-parameter `
-  --name /app/portfolioadvisor/agentcore/cognito_discovery_url `
-  --query 'Parameter.Value' --output text
-
-$COGNITO_CLIENT_ID = aws ssm get-parameter `
-  --name /app/portfolioadvisor/agentcore/client_id `
-  --query 'Parameter.Value' --output text
-
-$COGNITO_WEB_CLIENT_ID = aws ssm get-parameter `
-  --name /app/portfolioadvisor/agentcore/web_client_id `
-  --query 'Parameter.Value' --output text
-
-Write-Host "Discovery URL: $COGNITO_DISCOVERY_URL"
-Write-Host "Client IDs:    $COGNITO_CLIENT_ID  $COGNITO_WEB_CLIENT_ID"
-
-```
-:::
-::::
-
-## Step 2: Secure the Runtime
-
-Open `agentcore/agentcore.json` and add three fields to the `PortfolioAdvisor` runtime entry, replacing the placeholder values with the ones retrieved above:
-
-:::code{language=json showCopyAction=false}
-"requestHeaderAllowlist": [
-  "X-Amzn-Bedrock-AgentCore-Runtime-Custom-User-Id",
-  "Authorization"
-],
-"authorizerType": "CUSTOM_JWT",
-"authorizerConfiguration": {
-  "customJwtAuthorizer": {
-    "discoveryUrl": "<COGNITO_DISCOVERY_URL value>",
-    "allowedClients": ["<COGNITO_CLIENT_ID value>", "<COGNITO_WEB_CLIENT_ID value>"]
-  }
-}
+:::code{language=bash showCopyAction=false}
+┌──────────────────────────────────────────────────────────────────┐
+│  OAuth 2.0 Flows                                                 │
+│                                                                  │
+│  User (password grant)        Service (client_credentials)       │
+│       │                               │                          │
+│       ▼                               ▼                          │
+│  Cognito User Pool ─────────── Cognito User Pool                 │
+│       │                               │                          │
+│       └──── JWT access token ─────────┘                          │
+└──────────────────────────────────────────────────────────────────┘
+                        │
+                        ▼
+        AgentCore Runtime (my-gateway)  [requires JWT]
+                        │
+                        │ forwards token
+                        ▼
+        AgentCore Gateway (my-gateway)  [requires JWT]
+                        ├── PortfolioRiskCheck → Lambda
+                        └── ExecuteTrade → Lambda
 :::
 
-> `discoveryUrl` tells AgentCore Runtime where to fetch Cognito's signing keys. `allowedClients` rejects tokens from any other app client. Adding `Authorization` to `requestHeaderAllowlist` lets your agent forward the token to the Gateway in Step 5.
+No deploys happen on this page. You only mint tokens, invoke the agent, and inspect claims.
 
-Add `import jwt` at the top of `app/PortfolioAdvisor/main.py`, then add the `extract_user_id()` helper and update the `invoke` function. Everything else in the file stays the same:
+---
 
-:::code{language=python}
-import jwt  # add to existing imports at top of main.py
+## Step 1: Confirm Your Environment
 
-def extract_user_id(context) -> str:
-    """Extract user identity from JWT bearer token, or fall back to custom header."""
-    headers = context.request_headers or {}
-    auth_header = headers.get("Authorization") or headers.get("authorization", "")
-    if auth_header.startswith("Bearer "):
-        try:
-            token = auth_header.split(" ", 1)[1]
-            claims = jwt.decode(token, options={"verify_signature": False})
-            username = claims.get("username") or claims.get("sub")
-            if username:
-                return username
-        except Exception as e:
-            log.warning(f"Failed to decode JWT: {e}")
-    return headers.get("x-amzn-bedrock-agentcore-runtime-custom-user-id", "anonymous")
-
-@app.entrypoint
-async def invoke(payload, context):
-    log.info("Invoking Agent...")
-    session_id = context.session_id
-    headers = context.request_headers or {}
-    auth_header = headers.get("Authorization") or headers.get("authorization", "")
-    user_id = extract_user_id(context)
-    agent = get_or_create_agent(session_id, user_id, auth_header)
-    stream = agent.stream_async(payload.get("prompt"))
-    async for event in stream:
-        if "data" in event and isinstance(event["data"], str):
-            yield event["data"]
-:::
-
-Deploy the updated configuration:
+The `~/portfolio-env.sh` file created in Lab 2 already exports everything you need. Verify it is loaded:
 
 :::code{language=bash}
-agentcore validate
+echo "Domain:     $COGNITO_DOMAIN"
+echo "Scope:      $COGNITO_SCOPE"
+echo "Pool ID:    $COGNITO_POOL_ID"
+echo "Client ID:  $COGNITO_CLIENT_ID"
+echo "Web Client: $COGNITO_WEB_CLIENT_ID"
 :::
+
+If any variable is blank, reload the file:
 
 :::code{language=bash}
-agentcore deploy -y -v
+source ~/portfolio-env.sh
 :::
 
-## Step 3: Obtain a Token
+---
 
-The test user `workshopuser@example.com` is already provisioned in the Cognito User Pool. Authenticate to get an access token:
+## Step 2: Refresh Your User Token (Optional)
 
-::::tabs{variant="container" groupId="os"}
-:::tab{label="macOS/Linux"}
-```bash
+Lab 2 produced a `$TOKEN` for the resource-owner-password flow. If more than 60 minutes have passed, or if you are in a fresh terminal, re-mint it with one line:
+
+:::code{language=bash}
 TOKEN=$(aws cognito-idp initiate-auth \
   --auth-flow USER_PASSWORD_AUTH \
   --client-id $COGNITO_WEB_CLIENT_ID \
   --auth-parameters USERNAME=workshopuser@example.com,PASSWORD='WorkshopPass1!' \
   --query 'AuthenticationResult.AccessToken' --output text)
 
-echo "Token obtained successfully"
-```
-:::
-:::tab{label="Windows"}
-```powershell
-$TOKEN = aws cognito-idp initiate-auth `
-  --auth-flow USER_PASSWORD_AUTH `
-  --client-id $COGNITO_WEB_CLIENT_ID `
-  --auth-parameters "USERNAME=workshopuser@example.com,PASSWORD=WorkshopPass1!" `
-  --query 'AuthenticationResult.AccessToken' --output text
-
-Write-Host "Token obtained successfully"
-
-```
-:::
-::::
-
-:::alert{header="Token expiry" type="info"}
-Tokens are valid for 60 minutes. If you see an auth error later, re-run this block.
+echo "User token refreshed"
 :::
 
-### Machine-to-Machine Token (Client Credentials)
+---
 
-For service-to-service calls (CI pipelines, batch jobs, other agents), use the `client_credentials` grant — no username/password required:
+## Step 3: Obtain a Machine-to-Machine Token
 
-::::tabs{variant="container" groupId="os"}
-:::tab{label="macOS/Linux"}
-```bash
-COGNITO_DOMAIN=$(aws ssm get-parameter \
-  --name /app/portfolioadvisor/agentcore/cognito_domain \
-  --query 'Parameter.Value' --output text)
+For service-to-service calls (CI pipelines, batch jobs, other agents) use the `client_credentials` grant — no username or password required. The caller authenticates as an application, not a person.
 
-COGNITO_SCOPE=$(aws ssm get-parameter \
-  --name /app/portfolioadvisor/agentcore/cognito_auth_scope \
-  --query 'Parameter.Value' --output text)
+Retrieve the M2M client secret from Cognito and exchange it for a token:
 
-# Retrieve the M2M client secret from Cognito
+:::code{language=bash}
+# Retrieve the M2M client secret
 CLIENT_SECRET=$(aws cognito-idp describe-user-pool-client \
-  --user-pool-id $(aws ssm get-parameter --name /app/portfolioadvisor/agentcore/pool_id --query 'Parameter.Value' --output text) \
+  --user-pool-id $COGNITO_POOL_ID \
   --client-id $COGNITO_CLIENT_ID \
   --query 'UserPoolClient.ClientSecret' --output text)
 
+# Exchange credentials for a token via the Cognito token endpoint
 M2M_TOKEN=$(curl -s -X POST "$COGNITO_DOMAIN/oauth2/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "grant_type=client_credentials&client_id=$COGNITO_CLIENT_ID&client_secret=$CLIENT_SECRET&scope=$COGNITO_SCOPE" \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
 echo "M2M token obtained successfully"
-```
-:::
-:::tab{label="Windows"}
-```powershell
-$COGNITO_DOMAIN = aws ssm get-parameter `
-  --name /app/portfolioadvisor/agentcore/cognito_domain `
-  --query 'Parameter.Value' --output text
-
-$COGNITO_SCOPE = aws ssm get-parameter `
-  --name /app/portfolioadvisor/agentcore/cognito_auth_scope `
-  --query 'Parameter.Value' --output text
-
-# Retrieve the M2M client secret from Cognito
-$POOL_ID = aws ssm get-parameter --name /app/portfolioadvisor/agentcore/pool_id --query 'Parameter.Value' --output text
-$CLIENT_SECRET = aws cognito-idp describe-user-pool-client `
-  --user-pool-id $POOL_ID `
-  --client-id $COGNITO_CLIENT_ID `
-  --query 'UserPoolClient.ClientSecret' --output text
-
-$response = Invoke-RestMethod -Uri "$COGNITO_DOMAIN/oauth2/token" `
-  -Method POST -ContentType "application/x-www-form-urlencoded" `
-  -Body "grant_type=client_credentials&client_id=$COGNITO_CLIENT_ID&client_secret=$CLIENT_SECRET&scope=$COGNITO_SCOPE"
-
-$M2M_TOKEN = $response.access_token
-Write-Host "M2M token obtained successfully"
-
-```
-:::
-::::
-
-:::alert{header="When to use which" type="info"}
-Use the **user token** (`$TOKEN`) when you need per-user identity for policies and audit. Use the **M2M token** (`$M2M_TOKEN`) for automated pipelines that don't have a human user context. Both are accepted by the same authorizer — the Runtime doesn't distinguish between them.
 :::
 
-## Step 4: Test Authenticated Access
+Note that `$COGNITO_DOMAIN`, `$COGNITO_SCOPE`, `$COGNITO_POOL_ID`, and `$COGNITO_CLIENT_ID` are all already exported by `~/portfolio-env.sh` — no `aws ssm get-parameter` calls needed here.
 
-Invoke the agent with the bearer token:
-
-::::tabs{variant="container" groupId="os"}
-:::tab{label="macOS/Linux"}
-```bash
-SESSION_3=$(python3 -c 'import uuid; print(uuid.uuid4())')
-
-agentcore invoke "What's the risk analysis for TSLA?" \
-  --session-id $SESSION_3 --bearer-token "$TOKEN" --stream
-```
+:::alert{header="When to use which flow" type="info"}
+Use the **user token** (`$TOKEN`) when you need per-user identity for policies and audit trails. Use the **M2M token** (`$M2M_TOKEN`) for automated pipelines and scheduled jobs that have no human user context. Both are accepted by the same `CUSTOM_JWT` authorizer — the Runtime does not distinguish between them at the token-validation layer. The distinction matters for identity propagation and Cedar policy evaluation downstream.
 :::
-:::tab{label="Windows"}
-```powershell
-$SESSION_3 = [guid]::NewGuid().ToString()
-
-agentcore invoke "What's the risk analysis for TSLA?" `
-  --session-id $SESSION_3 --bearer-token "$TOKEN" --stream
-
-```
-:::
-::::
-
-Now verify that unauthenticated requests are rejected — omit the token and expect a 401:
-
-:::code{language=bash}
-agentcore invoke "What's the risk analysis for TSLA?" \
-  --session-id $SESSION_3 --stream
-:::
-
-You should see a 401 Unauthorized error — the Runtime is now secured.
-
-## Step 5: Secure the Gateway
-
-Gateway authorizer configuration cannot be updated in-place. Remove the existing gateway and recreate it with JWT authentication enabled:
-
-:::code{language=bash}
-agentcore remove gateway --name my-gateway -y
-:::
-
-Create a new gateway with the Cognito JWT authorizer:
-
-::::tabs{variant="container" groupId="os"}
-:::tab{label="macOS/Linux"}
-```bash
-agentcore add gateway --name my-gateway-secure --runtimes PortfolioAdvisor \
-  --authorizer-type CUSTOM_JWT \
-  --discovery-url $COGNITO_DISCOVERY_URL \
-  --allowed-clients $COGNITO_CLIENT_ID,$COGNITO_WEB_CLIENT_ID
-```
-:::
-:::tab{label="Windows"}
-```powershell
-agentcore add gateway --name my-gateway-secure --runtimes PortfolioAdvisor `
-  --authorizer-type CUSTOM_JWT `
-  --discovery-url $COGNITO_DISCOVERY_URL `
-  --allowed-clients "$COGNITO_CLIENT_ID,$COGNITO_WEB_CLIENT_ID"
-
-```
-:::
-::::
-
-Re-add both tool targets to the new gateway:
-
-::::tabs{variant="container" groupId="os"}
-:::tab{label="macOS/Linux"}
-```bash
-PORTFOLIO_RISK_LAMBDA_ARN=$(aws ssm get-parameter \
-  --name /app/portfolioadvisor/agentcore/portfolio_risk_lambda_arn \
-  --query 'Parameter.Value' --output text)
-agentcore add gateway-target \
-  --type lambda-function-arn \
-  --name PortfolioRiskCheck \
-  --lambda-arn $PORTFOLIO_RISK_LAMBDA_ARN \
-  --tool-schema-file app/PortfolioAdvisor/tool/portfolio_risk_schema.json \
-  --gateway my-gateway-secure
-
-TRADE_LAMBDA_ARN=$(aws ssm get-parameter \
-  --name /app/portfolioadvisor/agentcore/execute_trade_lambda_arn \
-  --query 'Parameter.Value' --output text)
-agentcore add gateway-target \
-  --type lambda-function-arn \
-  --name ExecuteTrade \
-  --lambda-arn $TRADE_LAMBDA_ARN \
-  --tool-schema-file app/PortfolioAdvisor/tool/trade_schema.json \
-  --gateway my-gateway-secure
-```
-:::
-:::tab{label="Windows"}
-```powershell
-$PORTFOLIO_RISK_LAMBDA_ARN = aws ssm get-parameter `
-  --name /app/portfolioadvisor/agentcore/portfolio_risk_lambda_arn `
-  --query 'Parameter.Value' --output text
-agentcore add gateway-target `
-  --type lambda-function-arn `
-  --name PortfolioRiskCheck `
-  --lambda-arn $PORTFOLIO_RISK_LAMBDA_ARN `
-  --tool-schema-file app/PortfolioAdvisor/tool/portfolio_risk_schema.json `
-  --gateway my-gateway-secure
-
-$TRADE_LAMBDA_ARN = aws ssm get-parameter `
-  --name /app/portfolioadvisor/agentcore/execute_trade_lambda_arn `
-  --query 'Parameter.Value' --output text
-agentcore add gateway-target `
-  --type lambda-function-arn `
-  --name ExecuteTrade `
-  --lambda-arn $TRADE_LAMBDA_ARN `
-  --tool-schema-file app/PortfolioAdvisor/tool/trade_schema.json `
-  --gateway my-gateway-secure
-
-```
-:::
-::::
-
-Update `app/PortfolioAdvisor/mcp_client/client.py` — two changes: the env var name changes to `AGENTCORE_GATEWAY_MY_GATEWAY_SECURE_URL`, and `get_gateway_mcp_client` now accepts and forwards an `auth_header`:
-
-:::code{language=python}
-import os, logging
-from mcp.client.streamable_http import streamablehttp_client
-from strands.tools.mcp.mcp_client import MCPClient
-
-logger = logging.getLogger(__name__)
-
-def get_gateway_mcp_client(auth_header: str = "") -> MCPClient | None:
-    """Returns an MCP Client for AgentCore Gateway, forwarding the caller's JWT"""
-    url = os.environ.get("AGENTCORE_GATEWAY_MY_GATEWAY_SECURE_URL") or os.environ.get("AGENTCORE_GATEWAY_MY_GATEWAY_URL")
-    if not url:
-        logger.warning("Gateway URL not set — gateway tools unavailable")
-        return None
-    if not url.endswith("/mcp"):
-        url = url.rstrip("/") + "/mcp"
-    headers = {"Authorization": auth_header} if auth_header else {}
-    return MCPClient(lambda: streamablehttp_client(url=url, headers=headers))
-:::
-
-:::code{language=bash}
-agentcore deploy -y -v
-:::
-
-## Step 6: Test End-to-End
-
-Verify that both local tools and Gateway tools work with authentication:
-
-::::tabs{variant="container" groupId="os"}
-:::tab{label="macOS/Linux"}
-```bash
-SESSION_4=$(python3 -c 'import uuid; print(uuid.uuid4())')
-
-# Local tool — compliance rules
-agentcore invoke "What are the compliance rules for options trading?" \
-  --session-id $SESSION_4 --bearer-token "$TOKEN" --stream
-
-# Gateway tool — portfolio risk via Lambda
-agentcore invoke "Check the risk profile for PORT-005" \
-  --session-id $SESSION_4 --bearer-token "$TOKEN" --stream
-```
-:::
-:::tab{label="Windows"}
-```powershell
-$SESSION_4 = [guid]::NewGuid().ToString()
-
-# Local tool — compliance rules
-agentcore invoke "What are the compliance rules for options trading?" `
-  --session-id $SESSION_4 --bearer-token "$TOKEN" --stream
-
-# Gateway tool — portfolio risk via Lambda
-agentcore invoke "Check the risk profile for PORT-005" `
-  --session-id $SESSION_4 --bearer-token "$TOKEN" --stream
-
-```
-:::
-::::
-
-## Architecture
-
-:::code{language=bash showCopyAction=false}
-Client (JWT token)
-    ↓ Cognito validates
-AgentCore Runtime (PortfolioAdvisor)  [requires JWT]
-    ├── get_stock_analysis(), get_compliance_rules()
-    └── MCP → AgentCore Gateway (my-gateway-secure)  [requires JWT]
-                    ↓
-              Lambda: check_portfolio_risk
-:::
-
-## What Just Happened?
-
-Both endpoints now require a valid Cognito JWT. Unauthenticated requests are rejected at the Runtime before reaching agent code. The same token flows from the Runtime to the Gateway, so the caller's identity is validated at every layer. The Lambda tools remain unchanged — only the access path is now secured.
 
 ---
 
-## Best Practices: Defense in Depth for Agent Systems
+## Step 4: Invoke the Agent with the M2M Token
 
-:::alert{header="Best Practice" type="info"}
-**Secure every layer independently.** An agent system has multiple callable surfaces — Runtime, Gateway, and upstream APIs. Assume each endpoint will be discovered and called directly. Authenticate at all of them.
+The same `agentcore invoke` command that works with a user token also works with an M2M token — the authorizer on `my-gateway` accepts either:
+
+:::code{language=bash}
+SESSION_M2M=$(python3 -c 'import uuid; print(uuid.uuid4())')
+
+agentcore invoke "What are the compliance rules for options trading?" \
+  --session-id $SESSION_M2M --bearer-token "$M2M_TOKEN" --stream
 :::
 
-- **Both layers need auth.** Runtime and Gateway are independent HTTPS endpoints. Securing only the Runtime leaves the Gateway URL open — callers can bypass your agent and invoke Lambda tools directly. Each layer must reject unauthorized requests on its own.
+The agent responds normally. But notice what is different under the hood.
 
-- **Design for token expiry.** Cognito access tokens expire after 60 minutes. Production systems should refresh proactively using the `REFRESH_TOKEN_AUTH` flow — do not wait for a 401 error to trigger a refresh.
+### Inspect the Token Claims
 
-- **Least privilege with `allowedClients`.** Issue separate Cognito app clients for different callers (users, pipelines, other agents) and list only the ones that need access. A compromised credential then affects only that one client.
+Decode both tokens (without verifying the signature — for inspection only) and compare the claims:
 
-- **Cognito rotates signing keys automatically.** AgentCore Runtime fetches the public keys from the OIDC `discoveryUrl` on each validation, so key rotation is transparent — no manual steps required.
+:::code{language=bash}
+python3 - <<'EOF'
+import base64, json, sys
 
-- **Never embed tokens in code or prompts.** JWT tokens are credentials. Do not log them, store them in persistent environment variables, or include them in system prompts or tool descriptions. Read the token from the request context per invocation, forward it, and treat it as ephemeral.
+def decode_jwt_payload(token):
+    # JWT is header.payload.signature — decode the middle segment
+    payload = token.split('.')[1]
+    # Add padding so base64 doesn't complain
+    padding = 4 - len(payload) % 4
+    payload += '=' * (padding % 4)
+    return json.loads(base64.urlsafe_b64decode(payload))
 
-**Multi-tenant isolation:**
+import os
+user_token = os.environ.get('TOKEN', '')
+m2m_token  = os.environ.get('M2M_TOKEN', '')
 
-When a single agent deployment serves multiple users or teams, the security architecture must guarantee:
+if user_token:
+    u = decode_jwt_payload(user_token)
+    print("=== User token claims ===")
+    for k in ('sub', 'username', 'token_use', 'client_id', 'scope', 'exp'):
+        print(f"  {k}: {u.get(k)}")
 
-| Requirement | How AgentCore Addresses It |
-|---|---|
-| User A can't see User B's data | Session isolation (microVM per session) + JWT `sub` claim scoping |
-| Role-based permissions | JWT custom claims (`role`, `team`) → Cedar policies evaluate them (Lab 4) |
-| Audit per-user | JWT `sub` claim logged in every trace → query by user identity |
-| Emergency revocation | Disable the Cognito app client → all tokens issued by that client immediately fail validation |
-| Key rotation | Cognito rotates JWKS automatically; AgentCore re-fetches from `discoveryUrl` on each validation |
+if m2m_token:
+    m = decode_jwt_payload(m2m_token)
+    print("\n=== M2M token claims ===")
+    for k in ('sub', 'username', 'token_use', 'client_id', 'scope', 'exp'):
+        print(f"  {k}: {m.get(k)}")
+EOF
+:::
 
-**Token lifecycle in production:**
+Key observations:
 
-```
-User authenticates → Cognito issues access token (60 min TTL)
+| Claim | User token | M2M token |
+|---|---|---|
+| `username` | `workshopuser@example.com` | _(absent)_ |
+| `sub` | User's UUID in the pool | App client ID |
+| `token_use` | `access` | `access` |
+| `scope` | Pool-level scopes | Resource server scope (e.g. `portfolioadvisor/invoke`) |
+| `client_id` | Web client ID | M2M client ID |
+
+Because the M2M token has no `username` claim, the `extract_user_id()` function in `main.py` (added in Lab 2) falls back to the `sub` claim — which is the M2M client ID. This identity is what flows into Cedar policy evaluation in [Lab 3](../50-lab4-governance/).
+
+---
+
+## Token Lifecycle in Production
+
+:::code{language=bash showCopyAction=false}
+User/service authenticates → Cognito issues access token (60-min TTL)
     ↓
-Client stores token (memory only — never disk)
+Client stores token in memory only — never on disk, never in env files
     ↓
-Client passes token on each invocation (Authorization header)
+Client passes token on each invocation (Authorization: Bearer <token>)
     ↓
 AgentCore Runtime validates (signature + expiry + audience + issuer)
     ↓
-Runtime forwards to Gateway (same token, re-validated)
+Runtime forwards to Gateway (same token, re-validated at that layer)
     ↓
-Token expires → Client uses refresh token → New access token (no re-login)
-```
+Token age > 55 min → Client proactively refreshes (REFRESH_TOKEN_AUTH)
+    ↓
+Token expires → Refresh token used → New access token (no re-login)
+:::
 
-For long-running sessions (up to 8 hours in AgentCore), the client application is responsible for proactive refresh. A common pattern: refresh when the token has < 5 minutes remaining, not when a 401 is received.
+**Proactive refresh — do not wait for a 401.** A 60-minute TTL means your agent may be mid-session when expiry hits. The recommended pattern is to refresh when fewer than 5 minutes remain, not on error:
+
+:::code{language=bash}
+# Example: refresh the user token using the refresh token
+# (capture RefreshToken at login time and store it securely)
+TOKEN=$(aws cognito-idp initiate-auth \
+  --auth-flow REFRESH_TOKEN_AUTH \
+  --client-id $COGNITO_WEB_CLIENT_ID \
+  --auth-parameters REFRESH_TOKEN="$REFRESH_TOKEN" \
+  --query 'AuthenticationResult.AccessToken' --output text)
+:::
+
+**M2M tokens have no refresh token.** The `client_credentials` grant does not issue a refresh token — the client simply re-authenticates with its secret when needed. Keep the TTL short (Cognito default is 60 minutes) and re-mint on expiry.
 
 ---
 
-### What's Next
+## Defense in Depth: Production Best Practices
 
-In Lab 4, you'll govern what your agent is allowed to do — applying action-level policies that constrain tool calls even for authenticated users.
+::::expand{header="Best practices reference (click to expand)"}
 
-→ Next: [Lab 4: Govern Agent Actions with Policies](../50-lab4-governance/)
+:::alert{header="Secure every layer independently" type="info"}
+Runtime and Gateway are independent HTTPS endpoints. In Lab 2 you saw that each was created with its own JWT authorizer. Assume each endpoint will be discovered and called directly. Authenticate at all of them.
+:::
+
+**Multi-tenant isolation** — when a single agent deployment serves multiple users or teams:
+
+| Requirement | How AgentCore Addresses It |
+|---|---|
+| User A cannot see User B's data | Session isolation (microVM per session) + JWT `sub` claim scoping |
+| Role-based permissions | JWT custom claims (`role`, `team`) → Cedar policies evaluate them ([Lab 3](../50-lab4-governance/)) |
+| Audit per user | JWT `sub` claim logged in every trace → query by user identity |
+| Emergency revocation | Disable the Cognito app client → all tokens issued by that client immediately fail validation |
+| Key rotation | Cognito rotates JWKS automatically; AgentCore re-fetches from `discoveryUrl` on each validation |
+
+**Operational rules:**
+
+- **`allowedClients` least privilege.** Issue separate Cognito app clients for different callers (users, pipelines, other agents) and list only the ones that need access. A compromised credential then affects only that one client.
+- **Cognito rotates signing keys automatically.** AgentCore Runtime fetches public keys from the OIDC `discoveryUrl` on each validation — key rotation is transparent, no manual steps required.
+- **Never embed tokens.** JWT tokens are credentials. Do not log them, store them in persistent environment variables, or include them in system prompts or tool descriptions. Read the token from the request context per invocation, forward it, and treat it as ephemeral.
+- **M2M secrets belong in Secrets Manager** — not in environment variables or source control.
+
+::::
+
+---
+
+## What's Next
+
+- If you haven't completed [Lab 3: Govern Agent Actions with Cedar Policies](../50-lab4-governance/) yet, head there next — Cedar policies use the identity claims you inspected here.
+- Other self-paced deep dives available after the live session:
+  - [Observability Deep Dive](../25-lab1b-observability/)
+  - [Evaluations](../60-lab5-evaluations/)

@@ -35,56 +35,59 @@ The AgentCore CLI abstracts away infrastructure complexity, letting developers f
 
 ## What You'll Build
 
-In this hands-on workshop, you'll build a **Portfolio Advisor Agent** for a capital markets firm — deploying it to production and progressively adding security, governance, evaluations, and network isolation using the AgentCore CLI.
+In this hands-on workshop, you'll build a **Portfolio Advisor Agent** for a capital markets firm — deploying it to production and progressively adding security, governance, and observability using the AgentCore CLI.
 
 > **Note:** The financial data, compliance rules, and trading scenarios in this workshop are simulated for educational purposes only and do not constitute actual regulatory guidance.
 
-### Core Labs
+## Workshop Schedule
 
-| Lab | Title | Time | What You'll Learn |
-|-----|-------|------|-------------------|
-| — | Foundations (reading) | ~5 min | Agent planning, observability strategy, "no code changes" philosophy |
-| 1 | Deploy to AgentCore Runtime | ~15 min | Deploy pre-built agent, invoke via CLI |
-| 1B | Observability Deep Dive | ~15 min | Traces, session isolation, token metrics, CloudWatch GenAI dashboards |
-| 2 | Centralize Tools with Gateway | ~25 min | Gateway creation, Lambda tool registration, credential patterns (JWT vs IAM vs OBO) |
-| 3 | Secure with JWT Authentication | ~20 min | Cognito JWT auth on Runtime and Gateway, end-to-end token propagation |
-| 4 | Govern Agent Actions with Policies | ~25 min | Cedar policies, trade limits, restricted tickers, agentic explainability |
-| 5 | Evaluate Agent Quality | ~15 min | Continuous quality monitoring with built-in evaluators |
-| 6 | VPC Integration for Private Networking | ~15 min | Private subnet isolation, VPC endpoints, PrivateLink |
+### Live Session (60 minutes)
 
-### Optional Labs
+| Segment | Title | Time | What You'll Do |
+|---------|-------|------|----------------|
+| Talk | Intro: AgentCore for Financial Services | ~8 min | Facilitator presents; read [Foundations](./15-foundations/) |
+| [Lab 1](./20-lab1-runtime/) | Deploy to AgentCore Runtime | ~10 min | Deploy pre-built agent, invoke via CLI; read while it deploys |
+| [Lab 2](./30-lab2-gateway/) | Connect Tools with Gateway + JWT Auth | ~18 min | Gateway creation, Lambda tool registration, JWT auth end-to-end |
+| [Lab 3](./50-lab4-governance/) | Govern Agent Actions with Cedar Policies | ~16 min | Cedar policies deny a 5,000-share trade that succeeded in Lab 2 |
+| Buffer | Finish up / questions | ~8 min | Fast finishers: try the restricted-ticker Cedar policy extension |
 
-| Lab | Title | Time | Prerequisites | What You'll Learn |
-|-----|-------|------|---------------|-------------------|
-| 2B | Enterprise Tool Registry | ~20 min | Lab 2 | Tool approval workflow, security review, MCP server registration, semantic discovery |
-| 7 | Add Persistent Memory | ~20 min | Labs 1–3 | SEMANTIC and SUMMARIZATION memory strategies |
-| 8 | Build Client Portal | ~20 min | Labs 1–3 | Flask chat frontend with Cognito login |
-| 9 | Cost Optimization | ~15 min | Labs 1–5 | Session lifecycle, eval sampling, token monitoring |
+### Self-Paced (after the session — your event stays live)
+
+The account stays active after the session ends. Come back and continue whenever you like.
+
+| Lab | Title | Time | What You'll Do |
+|-----|-------|------|----------------|
+| [Observability Deep Dive](./25-lab1b-observability/) | Observability Deep Dive | ~15 min | Traces, session isolation, token metrics, CloudWatch GenAI dashboards |
+| [OAuth Token Flows](./40-lab3-security/) | OAuth Token Flows: M2M & Token Lifecycle | ~20 min | M2M client credentials, token introspection, full lifecycle |
+| [Enterprise Tool Registry](./35-lab2b-tool-registry/) | Enterprise Tool Registry | ~20 min | Tool approval workflow, security review, MCP server registration |
+| [Evaluations](./60-lab5-evaluations/) | Evaluations | ~15 min | Continuous quality monitoring with built-in LLM-as-a-Judge evaluators |
+| [VPC Networking](./70-lab6-vpc/) | VPC Networking | ~15 min | Private subnet isolation, VPC endpoints, PrivateLink |
+| [Memory](./80-optional-memory/) | Add Persistent Memory | ~20 min | SEMANTIC and SUMMARIZATION memory strategies |
+| [Frontend](./85-optional-frontend/) | Build Client Portal | ~20 min | Flask chat frontend with Cognito login |
+| [Cost Optimization](./88-optional-cost/) | Cost Optimization | ~15 min | Session lifecycle, eval sampling, token monitoring |
 
 ### Architecture Overview
 
-At the end of the core labs you will have deployed the following infrastructure:
+At the end of the live session you will have deployed the following infrastructure:
 
 :::code{language=bash showCopyAction=false}
 Client (with JWT token)
     ↓
 Cognito validates token
     ↓
-AgentCore Runtime (PortfolioAdvisor) — in VPC private subnet
+AgentCore Runtime (PortfolioAdvisor)
     ├── Local tools: get_stock_analysis(), get_compliance_rules()
     └── MCP Client → AgentCore Gateway (JWT + Cedar Policy Engine)
                           ├── PortfolioRiskCheck → Lambda
-                          ├── ExecuteTrade → Lambda (governed by Cedar policies)
-                          ↓
-                    CloudWatch GenAI Observability
-                          ↓
-                    AgentCore Evaluations (QualityMonitor)
+                          └── ExecuteTrade → Lambda (governed by Cedar policies)
+                                ↓
+                          CloudWatch GenAI Observability
 :::
+
+For VPC private-subnet isolation and continuous Evaluations, see the self-paced labs above.
 
 ## Prerequisites
 
 Your Workshop Studio environment is **fully pre-provisioned**. No manual setup is required — proceed directly to the Getting Started page.
 
 → [Getting Started](./10-intro/)
-
-→ [Foundations: Building Production Agents](./15-foundations/) *(read while setup runs)*

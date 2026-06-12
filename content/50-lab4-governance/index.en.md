@@ -1,24 +1,17 @@
 ---
-title: "Lab 4: Govern Agent Actions with Policies"
-weight: 52
+title: "Lab 3: Govern Agent Actions with Cedar Policies"
+weight: 40
 ---
 
-**⏱️ Estimated time: ~25 minutes**
+**⏱️ ~16 minutes (one deploy, ~2–3 min — you'll read through it)**
 
 ## Overview
 
-Your agent is deployed, has Gateway tools, and is secured with JWT authentication. But authentication only answers *"who is calling?"* — it doesn't answer *"what are they allowed to do?"*
+Your agent is deployed, has Gateway tools, and is secured with JWT authentication. Authentication answered *"who is calling?"* — but nothing yet answers *"what are they allowed to do?"*
 
-Should every authenticated user be able to execute trades of any size? What if a client asks the agent to buy 10,000 shares? Without governance, the agent will comply — it has no concept of business rules or position limits.
+You just watched a 5,000-share MSFT trade go through in Lab 2. The authenticated caller had every right to ask; the agent had every reason to comply. There were no quantity limits, no restricted-ticker checks, no approval gates. Any authenticated user could run that same prompt right now.
 
-**AgentCore Policy** solves this with [Cedar](https://www.cedarpolicy.com/) policies at the Gateway boundary. Policies are evaluated deterministically *outside* the agent's code — the agent can't bypass them, even if tricked by a clever prompt.
-
-### What You'll Learn
-
-- Create a Policy Engine and attach it to your Gateway
-- Write Cedar policies that restrict tool usage based on input parameters
-- Test policy enforcement via CLI (allowed trades succeed, oversized trades denied)
-- Surface agent reasoning and policy decisions for audit trails
+**AgentCore Policy** solves this with [Cedar](https://www.cedarpolicy.com/) policies evaluated at the Gateway boundary. Policies are enforced deterministically *outside* the agent's code — the agent can't bypass them, even if tricked by a clever prompt injection attack.
 
 :::alert{header="Compliance Disclaimer" type="warning"}
 The compliance rules and trade policies in this workshop are **simulated for educational purposes only** and do not constitute actual regulatory guidance.
@@ -29,15 +22,16 @@ The compliance rules and trade policies in this workshop are **simulated for edu
 :::code{language=bash showCopyAction=false}
 Client (authenticated)
     ↓
-AgentCore Runtime → MCP Client → AgentCore Gateway
+AgentCore Runtime → MCP Client → AgentCore Gateway (my-gateway)
                                        │
                                        ▼
                          ┌─────────────────────────────┐
                          │  Cedar Policy Engine         │ ← THIS LAB
                          │                             │
-                         │  permit: trades ≤ 1000 qty  │
-                         │  forbid: restricted tickers │
-                         │  forbid: large trades       │
+                         │  permit: trades < 1000 qty  │
+                         │  permit: risk checks (all)  │
+                         │  default deny: everything   │
+                         │  else blocked               │
                          └─────────────────────────────┘
                                        │
                               allow / deny
@@ -49,49 +43,40 @@ AgentCore Runtime → MCP Client → AgentCore Gateway
 
 | Concept | Description |
 |---------|-------------|
-| **Policy Engine** | Container for Cedar policies that evaluates authorization requests |
+| **Policy Engine** | Container for Cedar policies that evaluates authorization requests at the Gateway |
 | **Cedar Policy** | Declarative rule that permits or forbids tool access based on conditions |
-| **ENFORCE mode** | Denied requests are blocked at the Gateway |
-| **Default Deny** | All actions denied unless explicitly permitted |
+| **ENFORCE mode** | Denied requests are blocked at the Gateway — agent code never runs |
+| **Default Deny** | All actions are denied unless an explicit `permit` matches |
+
+---
 
 ## Step 1: Create a Policy Engine
 
-::::tabs{variant="container" groupId="os"}
-:::tab{label="macOS/Linux"}
 ```bash
 agentcore add policy-engine \
   --name PortfolioAdvisorPolicyEngine \
   --description "Governs portfolio advisor agent tool access — trade limits and tool permissions" \
-  --attach-to-gateways my-gateway-secure \
+  --attach-to-gateways my-gateway \
   --attach-mode ENFORCE
 ```
-:::
-:::tab{label="Windows"}
-```powershell
-agentcore add policy-engine `
-  --name PortfolioAdvisorPolicyEngine `
-  --description "Governs portfolio advisor agent tool access - trade limits and tool permissions" `
-  --attach-to-gateways my-gateway-secure `
-  --attach-mode ENFORCE
-
-```
-:::
-::::
 
 You should see:
+
 :::code{language=bash showCopyAction=false}
 Added policy engine 'PortfolioAdvisorPolicyEngine'
 :::
 
-## Step 2: Create Cedar Policies
+`--attach-mode ENFORCE` means the Gateway will actively block denied requests. An alternative mode, `LOG_ONLY`, lets you observe policy decisions without blocking — useful for validating policies before hardening. More on this in the best-practices section.
 
-Retrieve your Gateway ARN:
+---
 
-::::tabs{variant="container" groupId="os"}
-:::tab{label="macOS/Linux"}
+## Step 2: Write Two Cedar Policies
+
+First, retrieve your Gateway ARN — you'll embed it in each policy statement:
+
 ```bash
 GATEWAY_ID=$(aws bedrock-agentcore-control list-gateways \
-  --query "items[?contains(name, 'my-gateway-secure')].gatewayId | [0]" \
+  --query "items[?contains(name, 'my-gateway')].gatewayId | [0]" \
   --output text)
 
 GATEWAY_ARN=$(aws bedrock-agentcore-control get-gateway \
@@ -100,27 +85,9 @@ GATEWAY_ARN=$(aws bedrock-agentcore-control get-gateway \
 
 echo "Gateway ARN: $GATEWAY_ARN"
 ```
-:::
-:::tab{label="Windows"}
-```powershell
-$GATEWAY_ID = aws bedrock-agentcore-control list-gateways `
-  --query "items[?contains(name, 'my-gateway-secure')].gatewayId | [0]" `
-  --output text
 
-$GATEWAY_ARN = aws bedrock-agentcore-control get-gateway `
-  --gateway-identifier $GATEWAY_ID `
-  --query "gatewayArn" --output text
+### Policy 1: Permit trades under 1,000 shares
 
-Write-Host "Gateway ARN: $GATEWAY_ARN"
-
-```
-:::
-::::
-
-### Policy 1: Permit trades under 1000 shares
-
-::::tabs{variant="container" groupId="os"}
-:::tab{label="macOS/Linux"}
 ```bash
 agentcore add policy \
   --name trade_quantity_limit \
@@ -128,31 +95,15 @@ agentcore add policy \
   --description "Allow trades under 1000 shares only" \
   --statement "permit(principal, action == AgentCore::Action::\"ExecuteTrade___execute_trade\", resource == AgentCore::Gateway::\"${GATEWAY_ARN}\") when { context.input.quantity < 1000 };"
 ```
-:::
-:::tab{label="Windows"}
-```powershell
-$statement = 'permit(principal, action == AgentCore::Action::"ExecuteTrade___execute_trade", resource == AgentCore::Gateway::"' + $GATEWAY_ARN + '") when { context.input.quantity < 1000 };'
 
-agentcore add policy `
-  --name trade_quantity_limit `
-  --engine PortfolioAdvisorPolicyEngine `
-  --description "Allow trades under 1000 shares only" `
-  --statement $statement
+> **Cedar syntax note:** `action == AgentCore::Action::"ExecuteTrade___execute_trade"` — the format is `TargetName___tool_name` with **triple** underscores. `ExecuteTrade` is the gateway target name you registered in Lab 2; `execute_trade` is the Lambda tool name.
 
-```
-:::
-::::
-
-> **Cedar syntax:** `action == AgentCore::Action::"ExecuteTrade___execute_trade"` — format is `TargetName___tool_name` with **triple** underscores.
-
-### Policy 2: Permit portfolio risk check (all users)
+### Policy 2: Permit portfolio risk check (all authenticated users)
 
 :::alert{header="Why is this needed?" type="info"}
-Cedar uses **default deny**. Once a Policy Engine is attached in ENFORCE mode, every tool needs an explicit `permit` to work — including tools that worked before.
+Cedar uses **default deny**. Once a Policy Engine is attached in ENFORCE mode, *every* tool needs an explicit `permit` to work — including `check_portfolio_risk`, which worked fine before. Without this policy, the risk check would be silently blocked alongside the oversized trade.
 :::
 
-::::tabs{variant="container" groupId="os"}
-:::tab{label="macOS/Linux"}
 ```bash
 agentcore add policy \
   --name portfolio_risk_check_policy \
@@ -161,26 +112,211 @@ agentcore add policy \
   --statement "permit(principal, action == AgentCore::Action::\"PortfolioRiskCheck___check_portfolio_risk\", resource == AgentCore::Gateway::\"${GATEWAY_ARN}\") when { (principal is AgentCore::OAuthUser) };" \
   --validation-mode IGNORE_ALL_FINDINGS
 ```
-:::
-:::tab{label="Windows"}
-```powershell
-$statement = 'permit(principal, action == AgentCore::Action::"PortfolioRiskCheck___check_portfolio_risk", resource == AgentCore::Gateway::"' + $GATEWAY_ARN + '") when { (principal is AgentCore::OAuthUser) };'
 
-agentcore add policy `
-  --name portfolio_risk_check_policy `
-  --engine PortfolioAdvisorPolicyEngine `
-  --description "Allow all authenticated users to check portfolio risk" `
-  --statement $statement `
-  --validation-mode IGNORE_ALL_FINDINGS
+---
 
+## Step 3: Deploy (your final deploy)
+
+```bash
+agentcore deploy -y -v
 ```
+
+This is your **third and final deploy** of the session. While it runs (~2–3 min), work through the box below.
+
+---
+
+## Step 4: While This Deploys
+
+::::expand{header="Read while the deploy runs (click to open)"}
+
+### Cedar vs. Prompt-Based Rules
+
+The most common governance mistake in agentic AI is writing rules as system-prompt instructions: *"Never execute trades over 1,000 shares."* Here's why that approach fails at production scale:
+
+| Governance via prompt | Governance via Cedar policy |
+|-----------------------|-----------------------------|
+| LLM interprets the rule probabilistically | Evaluated deterministically, every time |
+| Can be bypassed via prompt injection | Cannot be bypassed — evaluated before tool execution |
+| No audit trail of enforcement | Every decision logged with full context |
+| Changing the rule = changing code = redeploying | Changing the rule = updating policy — no redeploy |
+| Agent must "understand" the rule | Agent doesn't even know the rule exists |
+
+The key insight is the last row: Cedar policies operate entirely outside the agent. The Lambda function doesn't know there's a quantity limit. The agent doesn't know either. The Gateway enforces it silently — and logs the decision either way.
+
+---
+
+### Re-read the Two Policies You Just Submitted
+
+**Policy 1: trade_quantity_limit**
+
+:::code{language=bash showCopyAction=false}
+permit(
+  principal,
+  action == AgentCore::Action::"ExecuteTrade___execute_trade",
+  resource == AgentCore::Gateway::"<your-gateway-arn>"
+) when { context.input.quantity < 1000 };
 :::
+
+- `principal` — any authenticated caller (the Cognito user from the JWT)
+- `action` — the specific tool being called, in `TargetName___tool_name` format
+- `resource` — scoped to this specific Gateway ARN (policies don't cross gateway boundaries)
+- `when { context.input.quantity < 1000 }` — the condition Cedar evaluates against the actual tool input at call time
+
+**Policy 2: portfolio_risk_check_policy**
+
+:::code{language=bash showCopyAction=false}
+permit(
+  principal,
+  action == AgentCore::Action::"PortfolioRiskCheck___check_portfolio_risk",
+  resource == AgentCore::Gateway::"<your-gateway-arn>"
+) when { (principal is AgentCore::OAuthUser) };
+:::
+
+- `principal is AgentCore::OAuthUser` — matches any user who authenticated via OAuth/JWT (your Cognito user)
+- There is no `when` condition on the tool inputs — all risk checks are permitted regardless of portfolio ID
+- Because Cedar defaults to deny, this explicit permit is what keeps `check_portfolio_risk` working after the policy engine is attached
+
+**What is NOT permitted:** Everything else. Any tool call that doesn't match one of these two permits is blocked. If you added a third Lambda tool to the Gateway tomorrow, it would be silently denied until you wrote a policy for it.
+
 ::::
 
-### Policy 3: Block restricted tickers
+---
 
-::::tabs{variant="container" groupId="os"}
-:::tab{label="macOS/Linux"}
+## Step 5: The Before/After Moment
+
+### Refresh Your Token
+
+If you've been in the deploy box for a while, your Cognito token may have expired (they're valid 60 min). Refresh it now:
+
+```bash
+source ~/portfolio-env.sh
+
+TOKEN=$(aws cognito-idp initiate-auth \
+  --auth-flow USER_PASSWORD_AUTH \
+  --client-id $COGNITO_WEB_CLIENT_ID \
+  --auth-parameters USERNAME=workshopuser@example.com,PASSWORD='WorkshopPass1!' \
+  --query 'AuthenticationResult.AccessToken' --output text)
+
+echo "Token refreshed"
+```
+
+---
+
+### Test 1: Small trade — should succeed ✅
+
+```bash
+agentcore invoke "Execute a trade: buy 500 shares of AAPL at market price for rebalancing" \
+  --bearer-token "$TOKEN" --stream
+```
+
+Quantity 500 < 1000 — the `trade_quantity_limit` permit matches. The Gateway forwards the request to the Lambda, and the trade executes.
+
+---
+
+### Test 2: The same trade that succeeded in Lab 2 — now denied ❌
+
+:::alert{header="Run this exact prompt — you ran it in Lab 2" type="warning"}
+In Lab 2 you ran this prompt and the trade went through. Nothing has changed in the agent code or the Lambda. Only the Cedar policies are new.
+:::
+
+```bash
+agentcore invoke "Buy 5000 shares of MSFT at limit price for a large client position" \
+  --bearer-token "$TOKEN" --stream
+```
+
+The agent calls `execute_trade` with `quantity=5000`. The Gateway evaluates the Cedar policy: `5000 < 1000` is false — no permit matches — default deny applies. The Gateway returns an authorization error. **The Lambda is never invoked.**
+
+The agent will respond with something like: *"I'm unable to execute this trade. The quantity exceeds the authorized per-trade limit."*
+
+Zero lines of agent code changed since Lab 2. The only change was attaching a Cedar policy engine.
+
+---
+
+### Test 3: Portfolio risk check — should still succeed ✅
+
+```bash
+agentcore invoke "Check the portfolio risk for PORT-002" \
+  --bearer-token "$TOKEN" --stream
+```
+
+The `portfolio_risk_check_policy` permit matches — `check_portfolio_risk` still works for all authenticated users.
+
+---
+
+### What's Happening Behind the Scenes
+
+:::code{language=bash showCopyAction=false}
+User: "Buy 5000 shares of MSFT"
+    ↓
+Agent decides to call execute_trade(ticker="MSFT", quantity=5000, ...)
+    ↓
+MCP Client sends request to Gateway
+    ↓
+Gateway → Policy Engine evaluates Cedar policies
+    ↓
+Cedar: quantity=5000, policy requires < 1000 → DENY
+    ↓
+Gateway returns authorization error (Lambda never invoked)
+    ↓
+Agent tells user: "I cannot execute this trade..."
+    ↓
+Decision logged to CloudWatch: {action, decision: DENY, matchingPolicy, context.input}
+:::
+
+---
+
+## Step 6: Agentic Explainability — Audit Trails
+
+For FSI, it's not enough that the agent works correctly — you need to *prove* it did. Explainability means answering three questions for any interaction:
+
+1. **What did the agent decide to do?** (tool selection reasoning)
+2. **Was it allowed?** (policy decision)
+3. **Why or why not?** (the policy rule that matched or failed to match)
+
+### View Agent Reasoning Traces
+
+```bash
+agentcore logs --runtime PortfolioAdvisor --since 5m
+```
+
+In the CloudWatch GenAI Observability dashboard (**GenAI Observability → Bedrock AgentCore → PortfolioAdvisor → DEFAULT**), each trace shows the agent's tool selection decision, input parameters, and success or failure result.
+
+### View Policy Decisions
+
+Policy decisions are logged at the Gateway. Each entry contains:
+
+| Field | Example |
+|-------|---------|
+| `action` | `ExecuteTrade___execute_trade` |
+| `decision` | `DENY` |
+| `matchingPolicy` | `trade_quantity_limit` |
+| `context.input` | `{"ticker": "MSFT", "quantity": 5000, ...}` |
+| `principal` | `workshopuser@example.com` |
+
+### Constructing an Audit Record
+
+Join the agent trace with the policy log on `traceId` for a complete per-transaction record:
+
+:::code{language=bash showCopyAction=false}
+Audit Record for Trade Attempt:
+├── Timestamp: 2025-01-15T14:23:07Z
+├── User: workshopuser@example.com (via JWT sub claim)
+├── Agent Decision: Call execute_trade with quantity=5000, ticker=MSFT
+├── Policy Evaluation: DENY (matched policy: trade_quantity_limit)
+├── Reason: quantity 5000 >= 1000 (exceeds per-trade limit)
+└── Agent Response: "I cannot execute this trade. The quantity exceeds..."
+:::
+
+This audit trail is constructed automatically from CloudWatch data — no additional code required.
+
+---
+
+## Finished Early?
+
+### Rung 1: Add a Restricted-Ticker Policy
+
+Cedar's `forbid` keyword creates an absolute block that overrides any `permit`. Add a third policy that blocks trades on securities the firm has designated as restricted:
+
 ```bash
 agentcore add policy \
   --name restricted_ticker_policy \
@@ -189,40 +325,73 @@ agentcore add policy \
   --statement "forbid(principal, action == AgentCore::Action::\"ExecuteTrade___execute_trade\", resource == AgentCore::Gateway::\"${GATEWAY_ARN}\") when { [\"RESTRICTED-001\", \"RESTRICTED-002\"].contains(context.input.ticker) };" \
   --validation-mode IGNORE_ALL_FINDINGS
 ```
-:::
-:::tab{label="Windows"}
-```powershell
-$statement = 'forbid(principal, action == AgentCore::Action::"ExecuteTrade___execute_trade", resource == AgentCore::Gateway::"' + $GATEWAY_ARN + '") when { ["RESTRICTED-001", "RESTRICTED-002"].contains(context.input.ticker) };'
 
-agentcore add policy `
-  --name restricted_ticker_policy `
-  --engine PortfolioAdvisorPolicyEngine `
-  --description "Block trades on restricted securities" `
-  --statement $statement `
-  --validation-mode IGNORE_ALL_FINDINGS
+Then test it — try a trade that is within the quantity limit but on a restricted ticker:
 
+```bash
+agentcore invoke "Buy 100 shares of RESTRICTED-001 at market price" \
+  --bearer-token "$TOKEN" --stream
 ```
+
+Denied — even though 100 < 1000. The `forbid` on `RESTRICTED-001` overrides the `permit` for quantity < 1000. Cedar `forbid` always wins over `permit`.
+
+### Rung 2: Observability Deep Dive
+
+Explore latency tracing, custom metrics, and the CloudWatch GenAI Observability dashboard:
+
+→ [Observability Deep Dive](../25-lab1b-observability/)
+
+### Rung 3: OAuth Token Flows — M2M and Token Lifecycle
+
+Go deeper on machine-to-machine authentication, token exchange with Workload Identity, and multi-agent identity propagation:
+
+→ [Lab 3 (Self-Paced): OAuth Token Flows](../40-lab3-security/)
+
+**Your event environment stays live after the session ends** — all self-paced labs are available to continue today.
+
+---
+
+## Best Practices: Governance Outside the Agent
+
+:::alert{header="Best Practice" type="info"}
+**Enforce business rules deterministically at the Gateway — not in agent prompts.**
 :::
-::::
 
-## Step 3: Deploy
+**Common governance patterns:**
 
-:::alert{header="Known Issue: Policy Engine Attachment" type="warning"}
-The CDK deployment creates the policy engine and policies, but attaching the engine to the gateway may fail due to a circular dependency in IAM role policy creation. If `agentcore deploy` fails with a permissions error, follow the workaround steps below.
-:::
+- **Quantity limits** — `context.input.quantity < 1000` prevents oversized operations
+- **Restricted resources** — `forbid ... when { restricted_list.contains(resource_id) }` blocks specific securities or accounts
+- **Action type restrictions** — `forbid ... unless { action_type == "read" }` enforces read-only access for certain roles
+- **Role-based access** — `principal.getTag("role") == "admin"` for tiered authorization
+- **Emergency shutdown** — `forbid(principal, action, resource)` — a single line disables all tool access instantly
 
-First, temporarily remove the `--attach-to-gateways` from the policy engine configuration if the deploy fails. You can do this by editing `agentcore/agentcore.json` and removing the `policyEngineConfiguration` field from the gateway block, then redeploying. The policy engine and its policies will still be created — only the attachment step is deferred.
+**Explainability and audit:**
+- Cedar audit logs capture every policy decision with full context (who, what, when, why denied/permitted)
+- Combined with agent reasoning traces, you get a complete per-transaction decision record
+- Start in `LOG_ONLY` mode to validate policies against real traffic before switching to `ENFORCE` — this prevents accidentally blocking legitimate tools
+- Export decision logs to your compliance system via CloudWatch Logs subscription filters for long-term retention
 
-:::code{language=bash}
-agentcore deploy -y -v
-:::
+---
 
-### Workaround: Manual Policy Engine Attachment
+## What Just Happened?
 
-If the deployment succeeded but the policy engine is not attached to the gateway, run these commands to attach it manually:
+You added governance without changing agent code:
 
-::::tabs{variant="container" groupId="os"}
-:::tab{label="macOS/Linux"}
+1. **Policy Engine** — Container for Cedar authorization rules, attached to the Gateway in ENFORCE mode
+2. **Two Cedar policies** — One quantity limit, one blanket permit for risk checks; everything else default-denied
+3. **Deterministic enforcement** — The 5,000-share trade was blocked at the Gateway boundary; the Lambda was never invoked
+4. **Full audit trail** — Every policy decision is logged with who, what, and why — automatically, with no extra code
+
+---
+
+→ Next: you've completed the live session. Continue with the [self-paced labs](../25-lab1b-observability/) — or jump to the [Summary](../90-summary/).
+
+---
+
+::::expand{header="Troubleshooting: policy engine shows as not attached"}
+
+If Test 2 (the 5,000-share trade) is **not** denied after deploying, the policy engine may not have attached to the gateway during the CDK deploy. Run these four commands, then retest:
+
 ```bash
 # 1. Get the gateway role name
 GATEWAY_ROLE_NAME=$(aws cloudformation describe-stack-resources \
@@ -244,7 +413,7 @@ PE_ARN=$(aws cloudformation describe-stacks \
 
 GATEWAY_ID=$(aws cloudformation describe-stacks \
   --stack-name AgentCore-PortfolioAdvisor-default \
-  --query "Stacks[0].Outputs[?contains(OutputKey, 'GatewayMyGatewaySecureId')].OutputValue | [0]" \
+  --query "Stacks[0].Outputs[?contains(OutputKey, 'GatewayMyGatewayId')].OutputValue | [0]" \
   --output text)
 
 # 4. Attach the policy engine to the gateway
@@ -254,227 +423,7 @@ aws bedrock-agentcore-control update-gateway \
 
 echo "Policy engine attached to gateway: $GATEWAY_ID"
 ```
-:::
-:::tab{label="Windows"}
-```powershell
-# 1. Get the gateway role name
-$GATEWAY_ROLE_NAME = aws cloudformation describe-stack-resources `
-  --stack-name AgentCore-PortfolioAdvisor-default `
-  --query "StackResources[?ResourceType=='AWS::IAM::Role' && contains(LogicalResourceId, 'McpGateway')].PhysicalResourceId | [0]" `
-  --output text
 
-# 2. Grant the gateway role permission to call the policy engine
-aws iam put-role-policy `
-  --role-name $GATEWAY_ROLE_NAME `
-  --policy-name PolicyEngineAccess `
-  --policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["bedrock-agentcore:CheckAuthorizePermissions","bedrock-agentcore:IsAuthorized","bedrock-agentcore:IsAuthorizedWithToken","bedrock-agentcore:GetPolicyEngine"],"Resource":"*"}]}'
+After running these commands, re-run Test 2 — the 5,000-share trade should now be denied.
 
-# 3. Get the policy engine ARN and gateway ID
-$PE_ARN = aws cloudformation describe-stacks `
-  --stack-name AgentCore-PortfolioAdvisor-default `
-  --query "Stacks[0].Outputs[?contains(OutputKey, 'PolicyEngine') && contains(OutputKey, 'Arn')].OutputValue | [0]" `
-  --output text
-
-$GATEWAY_ID = aws cloudformation describe-stacks `
-  --stack-name AgentCore-PortfolioAdvisor-default `
-  --query "Stacks[0].Outputs[?contains(OutputKey, 'GatewayMyGatewaySecureId')].OutputValue | [0]" `
-  --output text
-
-# 4. Attach the policy engine to the gateway
-aws bedrock-agentcore-control update-gateway `
-  --gateway-identifier $GATEWAY_ID `
-  --policy-engine-configuration "{`"arn`":`"$PE_ARN`",`"mode`":`"ENFORCE`"}"
-
-Write-Host "Policy engine attached to gateway: $GATEWAY_ID"
-
-```
-:::
 ::::
-
-## Step 4: Test Policy Enforcement
-
-Refresh your token if needed:
-
-::::tabs{variant="container" groupId="os"}
-:::tab{label="macOS/Linux"}
-```bash
-COGNITO_WEB_CLIENT_ID=$(aws ssm get-parameter \
-  --name /app/portfolioadvisor/agentcore/web_client_id \
-  --query 'Parameter.Value' --output text)
-
-TOKEN=$(aws cognito-idp initiate-auth \
-  --auth-flow USER_PASSWORD_AUTH \
-  --client-id $COGNITO_WEB_CLIENT_ID \
-  --auth-parameters USERNAME=workshopuser@example.com,PASSWORD='WorkshopPass1!' \
-  --query 'AuthenticationResult.AccessToken' --output text)
-```
-:::
-:::tab{label="Windows"}
-```powershell
-$COGNITO_WEB_CLIENT_ID = aws ssm get-parameter `
-  --name /app/portfolioadvisor/agentcore/web_client_id `
-  --query 'Parameter.Value' --output text
-
-$TOKEN = aws cognito-idp initiate-auth `
-  --auth-flow USER_PASSWORD_AUTH `
-  --client-id $COGNITO_WEB_CLIENT_ID `
-  --auth-parameters "USERNAME=workshopuser@example.com,PASSWORD=WorkshopPass1!" `
-  --query 'AuthenticationResult.AccessToken' --output text
-
-```
-:::
-::::
-
-### Test 1: Small trade (should succeed ✅)
-
-:::code{language=bash}
-agentcore invoke "Execute a trade: buy 500 shares of AAPL at market price for rebalancing" \
-  --bearer-token "$TOKEN" --stream
-:::
-
-### Test 2: Large trade (should be denied ❌)
-
-:::code{language=bash}
-agentcore invoke "Buy 5000 shares of MSFT at limit price for a large client position" \
-  --bearer-token "$TOKEN" --stream
-:::
-
-The agent will report it cannot execute the trade — the Gateway blocked it before the request reached the Lambda.
-
-### Test 3: Portfolio risk check (should succeed ✅)
-
-:::code{language=bash}
-agentcore invoke "Check the portfolio risk for PORT-002" \
-  --bearer-token "$TOKEN" --stream
-:::
-
-### What's Happening Behind the Scenes
-
-:::code{language=bash showCopyAction=false}
-User: "Buy 5000 shares of MSFT"
-    ↓
-Agent decides to call execute_trade(ticker="MSFT", quantity=5000, ...)
-    ↓
-MCP Client sends request to Gateway
-    ↓
-Gateway → Policy Engine evaluates Cedar policies
-    ↓
-Cedar: quantity=5000, policy requires < 1000 → DENY
-    ↓
-Gateway returns authorization error
-    ↓
-Agent tells user: "I'm unable to execute this trade..."
-:::
-
-## Step 5: Agentic Explainability — Audit Trails
-
-For FSI, it's not enough that the agent works correctly — you need to *prove* it did. Explainability means answering three questions for any interaction:
-1. **What did the agent decide to do?** (tool selection reasoning)
-2. **Was it allowed?** (policy decision)
-3. **Why or why not?** (policy rule that matched)
-
-### View Agent Reasoning in Traces
-
-Every invocation captures the agent's tool selection reasoning in CloudWatch:
-
-:::code{language=bash}
-agentcore logs --runtime PortfolioAdvisor --since 5m
-:::
-
-In the CloudWatch GenAI Observability dashboard (**GenAI Observability → Bedrock AgentCore → PortfolioAdvisor → DEFAULT**), each trace shows:
-- The agent's tool selection decision (which tool it chose and why)
-- Input parameters passed to the tool
-- Success or failure result
-
-### View Policy Decisions
-
-Policy decisions are logged separately at the Gateway. Each log entry contains:
-
-| Field | Example |
-|-------|---------|
-| `action` | `ExecuteTrade___execute_trade` |
-| `decision` | `DENY` |
-| `matchingPolicy` | `trade_quantity_limit` |
-| `context.input` | `{"ticker": "MSFT", "quantity": 5000, ...}` |
-| `principal` | `workshopuser@example.com` |
-
-### Constructing an Audit Record
-
-For a complete audit trail, join the agent trace with the policy log using the `traceId`:
-
-:::code{language=bash showCopyAction=false}
-Audit Record for Trade Attempt:
-├── Timestamp: 2025-01-15T14:23:07Z
-├── User: workshopuser@example.com (via JWT sub claim)
-├── Agent Decision: Call execute_trade with quantity=5000, ticker=MSFT
-├── Policy Evaluation: DENY (matched policy: trade_quantity_limit)
-├── Reason: quantity 5000 >= 1000 (exceeds per-trade limit)
-└── Agent Response: "I cannot execute this trade. The quantity exceeds..."
-:::
-
-This audit trail is constructed automatically from CloudWatch data — no additional code required.
-
-## Architecture
-
-:::code{language=bash showCopyAction=false}
-CLI (agentcore invoke --bearer-token)
-    ↓
-AgentCore Runtime (JWT validated)
-    ├── Local tools (no policy needed)
-    └── MCP Client → Gateway (JWT + Policy Engine)
-                        ├── Cedar evaluates policies
-                        ├── ✅ check_portfolio_risk (always permitted)
-                        ├── ✅ execute_trade (quantity < 1000)
-                        └── ❌ execute_trade (quantity >= 1000) → DENIED
-                                    ↓
-                        CloudWatch (policy decisions logged)
-:::
-
-## What Just Happened?
-
-You added governance without changing agent code:
-
-1. **Policy Engine** — Container for authorization rules
-2. **Cedar policies** — Declarative rules based on tool inputs (quantity, ticker)
-3. **ENFORCE mode** — Denials are enforced at the Gateway boundary
-4. **Explainability** — Full audit trail from agent reasoning through policy decisions
-
----
-
-## Best Practices: Governance Outside the Agent
-
-:::alert{header="Best Practice" type="info"}
-**Enforce business rules deterministically at the Gateway — not in agent prompts.**
-:::
-
-**Why governance belongs outside the agent:**
-
-| In-prompt rules | Cedar policies |
-|----------------|---------------|
-| LLM interprets them probabilistically | Evaluated deterministically, every time |
-| Can be bypassed via prompt injection | Cannot be bypassed — evaluated before tool execution |
-| No audit trail of enforcement | Every decision logged with full context |
-| Changing rules = changing code = redeploying | Changing rules = updating policy = no redeploy |
-| Agent must "understand" the rule | Agent doesn't even know the rule exists |
-
-**Common governance patterns:**
-
-- **Quantity limits** — `context.input.quantity < 1000` prevents oversized operations
-- **Restricted resources** — `forbid ... when { restricted_list.contains(resource_id) }` blocks access to specific resources
-- **Action type restrictions** — `forbid ... unless { action_type == "read" }` enforces read-only access for certain roles
-- **Role-based access** — `principal.getTag("role") == "admin"` for tiered authorization
-- **Emergency shutdown** — `forbid(principal, action, resource)` — a single line disables all tool access instantly
-
-**Explainability and audit:**
-- Cedar audit logs capture every policy decision with full context (who, what, when, why denied/permitted)
-- Combined with agent reasoning traces, you get a complete per-transaction decision record
-- Use `LOG_ONLY` mode first to validate policies don't break existing workflows, then switch to `ENFORCE`
-- Export decision logs to your compliance system for long-term retention
-
----
-
-### What's Next
-
-In Lab 5, you'll add continuous quality monitoring to automatically evaluate your agent's performance on every interaction.
-
-→ Next: [Lab 5: Evaluate Agent Quality](../60-lab5-evaluations/)

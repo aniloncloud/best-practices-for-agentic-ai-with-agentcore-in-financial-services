@@ -103,7 +103,7 @@ Your DevBox development environment includes:
 | **mcp** | Latest | Model Context Protocol client |
 | **Docker** | Latest | Container builds for AgentCore Runtime |
 | **AWS CLI** | v2 | AWS resource management |
-| **Node.js** | 20.x | AgentCore CLI |
+| **Node.js** | 22.x | AgentCore CLI |
 | **AgentCore CLI** | Latest | `agentcore` commands |
 
 ## Enable Transaction Search (for Observability)
@@ -112,7 +112,7 @@ Your DevBox development environment includes:
 If you are running this at an AWS-led event, this will already be enabled, but you can double-check with the following steps:
 :::
 
-This is a one-time prerequisite to view observability metrics in CloudWatch. You will need this for Lab 4.
+This is a one-time prerequisite to view observability metrics in CloudWatch. You will need this for the Observability Deep Dive lab.
 
 1. Navigate to the [CloudWatch console](https://console.aws.amazon.com/cloudwatch/)
 2. In the left panel, find **GenAI Observability** → **Bedrock AgentCore**

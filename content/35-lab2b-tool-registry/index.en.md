@@ -1,12 +1,18 @@
 ---
-title: "Optional Lab 2B: Enterprise Tool Registry"
-weight: 35
+title: "Enterprise Tool Registry"
+weight: 60
 ---
 
 **⏱️ Estimated time: ~20 minutes**
 
+:::alert{header="Self-paced lab" type="info"}
+Do this after the live session — **your event account stays live**, so you can continue later today. If you're in a new terminal, run `source ~/portfolio-env.sh` to reload your environment variables.
+
+**Prerequisites:** Labs 1–2 (Deploy to AgentCore Runtime + Connect Tools with Gateway + JWT Auth)
+:::
+
 :::alert{header="Optional Lab — Requires Pre-provisioned Infrastructure" type="warning"}
-This lab is optional and requires a Market Data MCP server to be pre-provisioned in your workshop account. If the SSM parameter `/app/portfolioadvisor/agentcore/market_data_mcp_endpoint` does not exist, this lab cannot be completed. The core path continues directly from Lab 2 to Lab 3 (Security). No subsequent labs depend on the MarketData target added here.
+This lab is optional and requires a Market Data MCP server to be pre-provisioned in your workshop account. If the SSM parameter `/app/portfolioadvisor/agentcore/market_data_mcp_endpoint` does not exist, this lab cannot be completed. The core path continues directly from Lab 2 to Lab 3 (Govern Agent Actions with Cedar Policies). No subsequent labs depend on the MarketData target added here.
 :::
 
 ## Overview
@@ -53,19 +59,9 @@ AgentCore Gateway (my-gateway) — Enterprise Tool Registry
 
 Your Gateway from Lab 2 already has two approved tools. Let's see what's registered:
 
-::::tabs{variant="container" groupId="os"}
-:::tab{label="macOS/Linux"}
-```bash
+:::code{language=bash}
 agentcore status --type gateway
-```
 :::
-:::tab{label="Windows"}
-```powershell
-agentcore status --type gateway
-
-```
-:::
-::::
 
 You should see `my-gateway` with two targets:
 - **PortfolioRiskCheck** — `check_portfolio_risk` (Lambda)
@@ -79,27 +75,13 @@ A market data team has deployed an MCP server that provides real-time quotes, hi
 
 Retrieve the MCP server endpoint (pre-provisioned):
 
-::::tabs{variant="container" groupId="os"}
-:::tab{label="macOS/Linux"}
-```bash
+:::code{language=bash}
 MARKET_DATA_ENDPOINT=$(aws ssm get-parameter \
   --name /app/portfolioadvisor/agentcore/market_data_mcp_endpoint \
   --query 'Parameter.Value' --output text)
 
 echo "Market Data MCP Server: $MARKET_DATA_ENDPOINT"
-```
 :::
-:::tab{label="Windows"}
-```powershell
-$MARKET_DATA_ENDPOINT = aws ssm get-parameter `
-  --name /app/portfolioadvisor/agentcore/market_data_mcp_endpoint `
-  --query 'Parameter.Value' --output text
-
-Write-Host "Market Data MCP Server: $MARKET_DATA_ENDPOINT"
-
-```
-:::
-::::
 
 ## Step 3: Security Review
 
@@ -179,7 +161,7 @@ The market data MCP server exposes three tools. Review their schemas:
 
 ✅ **Required fields specified** — No optional parameters that could be omitted and cause unexpected behavior.
 
-✅ **Descriptions are specific** — Each tool clearly states what it does and what it returns. This helps the agent select the right tool (measurable via ToolSelectionAccuracy in Lab 5).
+✅ **Descriptions are specific** — Each tool clearly states what it does and what it returns. This helps the agent select the right tool (measurable via ToolSelectionAccuracy in the Evaluations lab).
 
 :::alert{header="Security Review Finding" type="info"}
 In production, you would also verify:
@@ -193,27 +175,13 @@ In production, you would also verify:
 
 With the review complete, add the MCP server as a Gateway target — this is the approval:
 
-::::tabs{variant="container" groupId="os"}
-:::tab{label="macOS/Linux"}
-```bash
+:::code{language=bash}
 agentcore add gateway-target \
   --type mcp-server \
   --name MarketData \
   --endpoint $MARKET_DATA_ENDPOINT \
   --gateway my-gateway
-```
 :::
-:::tab{label="Windows"}
-```powershell
-agentcore add gateway-target `
-  --type mcp-server `
-  --name MarketData `
-  --endpoint $MARKET_DATA_ENDPOINT `
-  --gateway my-gateway
-
-```
-:::
-::::
 
 You should see:
 :::code{language=bash showCopyAction=false}
@@ -241,9 +209,7 @@ agentcore deploy -y -v
 
 The agent should now discover and use the market data tools automatically — no code changes needed:
 
-::::tabs{variant="container" groupId="os"}
-:::tab{label="macOS/Linux"}
-```bash
+:::code{language=bash}
 SESSION_REG=$(python3 -c 'import uuid; print(uuid.uuid4())')
 
 # Test the new market data tool
@@ -257,27 +223,7 @@ agentcore invoke "Show me MSFT's historical prices for the last 3 months" \
 # Test sector analysis
 agentcore invoke "How is the Technology sector performing?" \
   --session-id $SESSION_REG --stream
-```
 :::
-:::tab{label="Windows"}
-```powershell
-$SESSION_REG = [guid]::NewGuid().ToString()
-
-# Test the new market data tool
-agentcore invoke "What's the current market quote for AAPL? Include bid/ask and volume." `
-  --session-id $SESSION_REG --stream
-
-# Test historical data
-agentcore invoke "Show me MSFT's historical prices for the last 3 months" `
-  --session-id $SESSION_REG --stream
-
-# Test sector analysis
-agentcore invoke "How is the Technology sector performing?" `
-  --session-id $SESSION_REG --stream
-
-```
-:::
-::::
 
 The agent now has five tools available:
 - `get_stock_analysis` (local)
@@ -298,9 +244,7 @@ In the trace, you'll see the agent calling the new `MarketData___get_market_quot
 
 To demonstrate the "remove = revoke" pattern:
 
-::::tabs{variant="container" groupId="os"}
-:::tab{label="macOS/Linux"}
-```bash
+:::code{language=bash}
 # Remove the target — immediately revokes agent access
 agentcore remove gateway-target --name MarketData -y
 
@@ -310,38 +254,9 @@ agentcore deploy -y -v
 # Try to use it — the agent will not have the tool available
 agentcore invoke "What's the market quote for AAPL?" \
   --session-id $(python3 -c 'import uuid; print(uuid.uuid4())') --stream
-```
 :::
-:::tab{label="Windows"}
-```powershell
-# Remove the target — immediately revokes agent access
-agentcore remove gateway-target --name MarketData -y
-
-# Redeploy
-agentcore deploy -y -v
-
-# Try to use it — the agent will not have the tool available
-agentcore invoke "What's the market quote for AAPL?" `
-  --session-id ([guid]::NewGuid().ToString()) --stream
-
-```
-:::
-::::
 
 The agent will fall back to `get_stock_analysis` (which has basic price data) or tell the user it doesn't have real-time market data. The tool is gone from the registry — it no longer exists for the agent.
-
-:::alert{header="Note about Lab 3" type="info"}
-Lab 3 (Security) removes `my-gateway` and creates `my-gateway-secure`. If you want MarketData tools available after Lab 3, you'll need to re-add the MarketData target to the new secured gateway after completing Lab 3:
-```bash
-agentcore add gateway-target \
-  --type mcp-server \
-  --name MarketData \
-  --endpoint $MARKET_DATA_ENDPOINT \
-  --gateway my-gateway-secure
-agentcore deploy -y -v
-```
-This is optional — the core labs do not depend on the MarketData target.
-:::
 
 ## Architecture
 
@@ -349,7 +264,7 @@ This is optional — the core labs do not depend on the MarketData target.
 AgentCore Gateway (my-gateway) — Enterprise Tool Registry
     ├── PortfolioRiskCheck (Lambda)     [Approved: Lab 2]
     ├── ExecuteTrade (Lambda)           [Approved: Lab 2]
-    └── MarketData (MCP Server)         [Approved: Lab 2B — this lab]
+    └── MarketData (MCP Server)         [Approved: Enterprise Tool Registry — this lab]
             ├── get_market_quote
             ├── get_historical_prices
             └── get_sector_performance
@@ -389,7 +304,7 @@ Gateway synchronizes and indexes tools
     ↓
 Agents discover tools automatically
     ↓
-Policy Engine governs WHO can call them (Lab 4)
+Policy Engine governs WHO can call them (Lab 3)
 ```
 
 **Why Gateway-as-registry works for FSI:**
@@ -416,12 +331,10 @@ When `searchType: SEMANTIC` is enabled on the Gateway, agents can discover tools
 
 **Multi-team tool sharing:**
 
-Multiple agents can share the same Gateway. Team A's agent and Team B's agent both discover tools from the same registry. Combined with Cedar policies (Lab 4), you can control which agent can call which tools — enabling tool sharing without over-permitting access.
+Multiple agents can share the same Gateway. Team A's agent and Team B's agent both discover tools from the same registry. Combined with Cedar policies (Lab 3), you can control which agent can call which tools — enabling tool sharing without over-permitting access.
 
 ---
 
 ### What's Next
 
-In Lab 3, you'll secure both Runtime and Gateway with Cognito JWT authentication — so only authorized users can invoke your agent and its tools.
-
-→ Next: [Lab 3: Secure with JWT Authentication](../40-lab3-security/)
+→ Continue with: [Evaluations](../60-lab5-evaluations/) | [VPC Networking](../70-lab6-vpc/) | [Memory](../80-optional-memory/)

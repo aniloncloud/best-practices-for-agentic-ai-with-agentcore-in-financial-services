@@ -5,7 +5,7 @@ weight: 15
 
 **⏱️ Reading time: ~10 minutes (no hands-on steps)**
 
-Read this while your facilitator introduces the session. No commands to run.
+Read this while your facilitator introduces the session — or while your first deploy is running in Lab 1. The key points are also summarized in Lab 1's "While this deploys" panel, so you won't miss anything by starting the deploy first.
 
 ---
 
@@ -25,24 +25,37 @@ Every one of these is a blocker in financial services. Not "nice to have" — a 
 
 ---
 
-## The Journey: Five Questions, Six Labs
+## The Journey: Five Questions, Three Live Labs + Self-Paced
 
-Each lab directly answers one (or more) of the CISO's questions:
+The live session answers questions 1, 2, and 3 directly. Questions 4 and 5 are answered in the self-paced labs after the session:
 
 :::code{language=bash showCopyAction=false}
-Lab 1: Deploy                    "Here's the agent, running in the cloud"
+── LIVE SESSION (52 min hands-on) ──────────────────────────────────────────
+
+Lab 1: Deploy to AgentCore Runtime
+  │   "Here's the agent, running in the cloud"
+  │   (observability is on from the first invoke)  ─── Question 3 begins ✓
   │
-Lab 1B: Observability            "We can prove what it did, when, and why" ─── Question 3 ✓
+Lab 2: Connect Tools with Gateway + JWT Auth
+  │   "Tools are centralized; only authenticated callers"  ── Question 1 ✓
   │
-Lab 2: Gateway                   "Tools are centralized, discoverable, and auditable"
-  │
-Lab 3: Security                  "OAuth 2.0 — only authenticated callers" ──── Question 1 ✓
-  │
-Lab 4: Governance                "Cedar policies block oversized trades" ────── Question 2 ✓
-  │                              "Every decision is logged for audit" ───────── Question 3 ✓
-Lab 5: Evaluations               "Quality is measured continuously" ──────────  Question 5 ✓
-  │
-Lab 6: VPC                       "All traffic stays on private networks" ─────  Question 4 ✓
+Lab 3: Govern Agent Actions with Cedar Policies
+      "Cedar policies block oversized trades"  ─────────── Question 2 ✓
+      "Every decision is logged for audit"  ──────────────  Question 3 ✓
+
+── SELF-PACED (event stays live after the session) ─────────────────────────
+
+Observability Deep Dive
+      Traces, session isolation, token metrics, dashboards  Question 3 (deep) ✓
+
+OAuth Token Flows: M2M & Token Lifecycle
+      Full token lifecycle, M2M client credentials  ───────  Question 1 (deep) ✓
+
+VPC Networking
+      "All traffic stays on private networks"  ────────────  Question 4 ✓
+
+Evaluations
+      "Quality is measured continuously"  ─────────────────  Question 5 ✓
 :::
 
 By the end, you'll have a production-hardened agent — not by rewriting it, but by progressively layering security, governance, observability, and network isolation around the same core code.
@@ -51,28 +64,30 @@ By the end, you'll have a production-hardened agent — not by rewriting it, but
 
 ## The Architecture You're Building
 
-This is where you'll end up after the six core labs:
+This is where you'll end up after the three live labs:
 
 :::code{language=bash showCopyAction=false}
 Client (with JWT token)
     ↓
-Cognito validates token ──────────────────────────── Lab 3
+Cognito validates token ──────────────────────────── Lab 2
     ↓
 AgentCore Runtime (PortfolioAdvisor) ─────────────── Lab 1
-    │   in VPC private subnet ────────────────────── Lab 6
-    │   with OpenTelemetry traces ────────────────── Lab 1B
-    │   with continuous evaluations ──────────────── Lab 5
+    │   with OpenTelemetry traces ────────────────── (from first invoke)
     │
     ├── Local tools: get_stock_analysis(), get_compliance_rules()
     │
     └── MCP Client → AgentCore Gateway ───────────── Lab 2
                           │
-                          ├── Cedar Policy Engine ── Lab 4
+                          ├── Cedar Policy Engine ── Lab 3
                           │   (permit/forbid rules)
                           │
                           ├── PortfolioRiskCheck → Lambda
                           └── ExecuteTrade → Lambda
+                                ↓
+                          CloudWatch GenAI Observability
 :::
+
+VPC private-subnet isolation (Lab: VPC Networking) and continuous Evaluations are added in the self-paced section.
 
 You'll build this **incrementally** — the agent code stays virtually unchanged. Each lab adds a layer through configuration and CLI commands.
 
@@ -82,7 +97,7 @@ You'll build this **incrementally** — the agent code stays virtually unchanged
 
 ### Work Backwards from the Problem
 
-The first question isn't "what can this agent do?" — it's "what problem are we solving for a specific user?" Start with three use cases. Get those working reliably before expanding scope. 
+The first question isn't "what can this agent do?" — it's "what problem are we solving for a specific user?" Start with three use cases. Get those working reliably before expanding scope.
 
 For our Portfolio Advisor, the scope is defined:
 - **Does:** Stock analysis, compliance rules, portfolio risk, trade execution
@@ -90,15 +105,15 @@ For our Portfolio Advisor, the scope is defined:
 
 ### Observability from Day One
 
-Don't add logging after something breaks. AgentCore instruments every invocation automatically — traces, metrics, and audit records from the very first `agentcore invoke`. You'll see this in Lab 1B.
+Don't add logging after something breaks. AgentCore instruments every invocation automatically — traces, metrics, and audit records from the very first `agentcore invoke`. You'll see this in Lab 1.
 
 ### Governance Outside the Agent
 
-Business rules don't belong in prompts. A prompt can be manipulated; a Cedar policy cannot. Trade limits and restricted securities are enforced deterministically at the Gateway boundary — the agent can't bypass them even if instructed to. You'll build this in Lab 4.
+Business rules don't belong in prompts. A prompt can be manipulated; a Cedar policy cannot. Trade limits and restricted securities are enforced deterministically at the Gateway boundary — the agent can't bypass them even if instructed to. You'll build this in Lab 3.
 
-### No Code Changes for Production Hardening
+### Minimal Code Changes for Production Hardening
 
-Authentication (Lab 3), governance (Lab 4), evaluations (Lab 5), and VPC isolation (Lab 6) are all **configuration changes** — not application code changes. Your `main.py` changes in exactly two places across all six labs. Platform teams own the guardrails; agent teams own the logic.
+Authentication (Lab 2), governance (Lab 3), evaluations, and VPC isolation are all **configuration changes** — not application code changes. Across the entire live session there is exactly one code edit: pasting the auth-forwarding snippet in Lab 2. Gateway wiring requires no edit — the agent code is pre-wired and automatically connects once a Gateway exists. Platform teams own the guardrails; agent teams own the logic.
 
 ---
 

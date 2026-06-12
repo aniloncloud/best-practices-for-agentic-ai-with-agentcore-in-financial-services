@@ -1,12 +1,17 @@
 ---
-title: "Optional Lab 7: Add Persistent Memory"
+title: "Optional Lab: Add Persistent Memory"
 weight: 80
 ---
 
 **Optional** — This lab adds persistent memory so your agent remembers client preferences across sessions. Skip it if you're short on time and continue to the Summary.
 
-**Prerequisites:** Labs 1–3 completed (deployed agent with JWT auth)
-**Estimated time: ~20 minutes**
+**⏱️ Estimated time: ~20 minutes**
+
+:::alert{header="Self-paced lab" type="info"}
+Do this after the live session — **your event account stays live**, so you can continue later today. If you're in a new terminal, run `source ~/portfolio-env.sh` to reload your environment variables.
+
+**Prerequisites:** Labs 1–2 (Deploy to AgentCore Runtime + Connect Tools with Gateway + JWT Auth)
+:::
 
 ## Overview
 
@@ -34,26 +39,14 @@ Agent recalls: "You prefer conservative tech stocks" ── no repetition needed
 
 Use the AgentCore CLI to add a memory resource:
 
-::::tabs{variant="container" groupId="os"}
-:::tab{label="macOS/Linux"}
-```bash
+:::code{language=bash}
 cd ~/PortfolioAdvisor
 
 agentcore add memory \
   --name SharedMemory \
   --strategies SEMANTIC,SUMMARIZATION \
   --expiry 30
-```
 :::
-:::tab{label="Windows"}
-```powershell
-cd ~/PortfolioAdvisor
-
-agentcore add memory --name SharedMemory --strategies "SEMANTIC,SUMMARIZATION" --expiry 30
-
-```
-:::
-::::
 
 You should see:
 
@@ -63,19 +56,9 @@ Added memory 'SharedMemory'
 
 Verify the updated configuration:
 
-::::tabs{variant="container" groupId="os"}
-:::tab{label="macOS/Linux"}
-```bash
+:::code{language=bash}
 cat agentcore/agentcore.json
-```
 :::
-:::tab{label="Windows"}
-```powershell
-Get-Content agentcore\agentcore.json
-
-```
-:::
-::::
 
 The `memories` array now contains your memory resource with SEMANTIC and SUMMARIZATION strategies, each with their own namespace patterns.
 
@@ -83,23 +66,11 @@ The `memories` array now contains your memory resource with SEMANTIC and SUMMARI
 
 Create the memory integration module:
 
-::::tabs{variant="container" groupId="os"}
-:::tab{label="macOS/Linux"}
-```bash
+:::code{language=bash}
 mkdir -p app/PortfolioAdvisor/memory
 touch app/PortfolioAdvisor/memory/__init__.py
 touch app/PortfolioAdvisor/memory/session.py
-```
 :::
-:::tab{label="Windows"}
-```powershell
-mkdir app\PortfolioAdvisor\memory
-New-Item app\PortfolioAdvisor\memory\__init__.py -Force
-New-Item app\PortfolioAdvisor\memory\session.py -Force
-
-```
-:::
-::::
 
 Open `app/PortfolioAdvisor/memory/session.py` and add the following code:
 
@@ -171,10 +142,10 @@ def get_or_create_agent(session_id=None, user_id=None, auth_header=""):
         )
 :::
 
-The `invoke` function already passes `session_id` and `user_id` from Lab 3 — no changes needed there. The `extract_user_id` function extracts the user from the JWT, which is what Memory uses as the `actor_id` to namespace stored facts per user.
+The `invoke` function already passes `session_id` and `user_id` from Lab 2 — no changes needed there. The `extract_user_id` function extracts the user from the JWT, which is what Memory uses as the `actor_id` to namespace stored facts per user.
 
 :::alert{header="Header allowlist" type="info"}
-Lab 3 already added `Authorization` and `X-Amzn-Bedrock-AgentCore-Runtime-Custom-User-Id` to `requestHeaderAllowlist` — no additional configuration needed here.
+Lab 2 already added `Authorization` and `X-Amzn-Bedrock-AgentCore-Runtime-Custom-User-Id` to `requestHeaderAllowlist` — no additional configuration needed here.
 :::
 
 ## Step 4: Deploy
@@ -205,9 +176,7 @@ You should see the memory resource added to your existing deployment:
 
 The CDK stack grants write access to memory but you must manually add retrieval permissions to the runtime role:
 
-::::tabs{variant="container" groupId="os"}
-:::tab{label="macOS/Linux"}
-```bash
+:::code{language=bash}
 RUNTIME_ROLE_NAME=$(aws cloudformation describe-stack-resources \
   --stack-name AgentCore-PortfolioAdvisor-default \
   --query "StackResources[?ResourceType=='AWS::IAM::Role' && contains(LogicalResourceId, 'ApplicationAgentPortfolio')].PhysicalResourceId | [0]" \
@@ -224,32 +193,7 @@ aws iam put-role-policy \
   --policy-document "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":[\"bedrock-agentcore:RetrieveMemoryRecords\",\"bedrock-agentcore:GetMemory\",\"bedrock-agentcore:ListMemoryRecords\",\"bedrock-agentcore:CreateMemoryEvent\",\"bedrock-agentcore:ListMemoryEvents\"],\"Resource\":\"${MEMORY_ARN}\"}]}"
 
 echo "Added MemoryAccess policy to role: $RUNTIME_ROLE_NAME"
-```
 :::
-:::tab{label="Windows"}
-```powershell
-$RUNTIME_ROLE_NAME = aws cloudformation describe-stack-resources `
-  --stack-name AgentCore-PortfolioAdvisor-default `
-  --query "StackResources[?ResourceType=='AWS::IAM::Role' && contains(LogicalResourceId, 'ApplicationAgentPortfolio')].PhysicalResourceId | [0]" `
-  --output text
-
-$MEMORY_ARN = aws cloudformation describe-stacks `
-  --stack-name AgentCore-PortfolioAdvisor-default `
-  --query "Stacks[0].Outputs[?contains(OutputKey, 'MemorySharedMemoryArn')].OutputValue | [0]" `
-  --output text
-
-$policyDoc = '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["bedrock-agentcore:RetrieveMemoryRecords","bedrock-agentcore:GetMemory","bedrock-agentcore:ListMemoryRecords","bedrock-agentcore:CreateMemoryEvent","bedrock-agentcore:ListMemoryEvents"],"Resource":"' + $MEMORY_ARN + '"}]}'
-
-aws iam put-role-policy `
-  --role-name $RUNTIME_ROLE_NAME `
-  --policy-name MemoryAccess `
-  --policy-document $policyDoc
-
-Write-Host "Added MemoryAccess policy to role: $RUNTIME_ROLE_NAME"
-
-```
-:::
-::::
 
 :::alert{header="Why is this step needed?" type="info"}
 The AgentCore CDK constructs grant event write permissions (`CreateMemoryEvent`) to the runtime role but do not currently grant retrieval permissions (`RetrieveMemoryRecords`). This manual IAM step is required until the CDK fix ships.
@@ -257,14 +201,14 @@ The AgentCore CDK constructs grant event write permissions (`CreateMemoryEvent`)
 
 ## Step 5: Test Memory Recall Across Sessions
 
-Get a token, then teach the agent about a client in **Session A**:
+Get a token using your environment variables, then teach the agent about a client in **Session A**:
 
-::::tabs{variant="container" groupId="os"}
-:::tab{label="macOS/Linux"}
-```bash
+:::code{language=bash}
+source ~/portfolio-env.sh
+
 TOKEN=$(aws cognito-idp initiate-auth \
   --auth-flow USER_PASSWORD_AUTH \
-  --client-id $(aws ssm get-parameter --name /app/portfolioadvisor/agentcore/web_client_id --query 'Parameter.Value' --output text) \
+  --client-id $COGNITO_WEB_CLIENT_ID \
   --auth-parameters USERNAME=workshopuser@example.com,PASSWORD='WorkshopPass1!' \
   --query 'AuthenticationResult.AccessToken' --output text)
 
@@ -273,35 +217,15 @@ SESSION_A=$(python3 -c 'import uuid; print(uuid.uuid4())')
 agentcore invoke "My name is Alex Chen. I prefer conservative dividend stocks. My risk tolerance is moderate." \
   --session-id $SESSION_A \
   --bearer-token "$TOKEN" --stream
-```
 :::
-:::tab{label="Windows"}
-```powershell
-$TOKEN = aws cognito-idp initiate-auth `
-  --auth-flow USER_PASSWORD_AUTH `
-  --client-id (aws ssm get-parameter --name /app/portfolioadvisor/agentcore/web_client_id --query 'Parameter.Value' --output text) `
-  --auth-parameters "USERNAME=workshopuser@example.com,PASSWORD=WorkshopPass1!" `
-  --query 'AuthenticationResult.AccessToken' --output text
-
-$SESSION_A = [guid]::NewGuid().ToString()
-
-agentcore invoke "My name is Alex Chen. I prefer conservative dividend stocks. My risk tolerance is moderate." `
-  --session-id $SESSION_A `
-  --bearer-token "$TOKEN" --stream
-
-```
-:::
-::::
 
 :::alert{header="How Memory identifies users" type="info"}
-The `extract_user_id` function (added in Lab 3) extracts the user identity from the JWT. Memory uses this as the `actor_id` to namespace stored facts. Since `workshopuser@example.com` always gets the same JWT `username` claim, preferences persist correctly across sessions for the same authenticated user.
+The `extract_user_id` function (added in Lab 2) extracts the user identity from the JWT. Memory uses this as the `actor_id` to namespace stored facts. Since `workshopuser@example.com` always gets the same JWT `username` claim, preferences persist correctly across sessions for the same authenticated user.
 :::
 
 Wait ~2 minutes for memory extraction to process, then start a **completely new session** and ask:
 
-::::tabs{variant="container" groupId="os"}
-:::tab{label="macOS/Linux"}
-```bash
+:::code{language=bash}
 sleep 2m
 
 SESSION_B=$(python3 -c 'import uuid; print(uuid.uuid4())')
@@ -309,21 +233,7 @@ SESSION_B=$(python3 -c 'import uuid; print(uuid.uuid4())')
 agentcore invoke "Do you know anything about me?" \
   --session-id $SESSION_B \
   --bearer-token "$TOKEN" --stream
-```
 :::
-:::tab{label="Windows"}
-```powershell
-Start-Sleep -Seconds 120
-
-$SESSION_B = [guid]::NewGuid().ToString()
-
-agentcore invoke "Do you know anything about me?" `
-  --session-id $SESSION_B `
-  --bearer-token "$TOKEN" --stream
-
-```
-:::
-::::
 
 Expected response:
 
@@ -362,4 +272,4 @@ AgentCore Runtime (PortfolioAdvisor)
 
 ---
 
-→ Next: [Optional Lab 8: Build Client Portal](../85-optional-frontend/) or [Summary](../90-summary/)
+→ Next: [Optional Frontend Lab](../85-optional-frontend/) or [Summary](../90-summary/)

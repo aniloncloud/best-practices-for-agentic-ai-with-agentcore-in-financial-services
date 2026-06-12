@@ -1,12 +1,17 @@
 ---
-title: "Optional Lab 8: Build Client Portal"
+title: "Optional Lab: Build Client Portal"
 weight: 85
 ---
 
 **Optional** — This lab builds a web chat interface using Flask with Cognito login that connects to your deployed agent. Skip it if you're short on time and continue to the Summary.
 
-**Prerequisites:** Labs 1–3 completed (deployed agent with JWT auth)
-**Estimated time: ~20 minutes**
+**⏱️ Estimated time: ~20 minutes**
+
+:::alert{header="Self-paced lab" type="info"}
+Do this after the live session — **your event account stays live**, so you can continue later today. If you're in a new terminal, run `source ~/portfolio-env.sh` to reload your environment variables.
+
+**Prerequisites:** Labs 1–2 (Deploy to AgentCore Runtime + Connect Tools with Gateway + JWT Auth; this lab uses the Cognito web client configured in Lab 2)
+:::
 
 ## Overview
 
@@ -44,27 +49,15 @@ Browser (localhost:8501)  ← THIS LAB
 
 ## Step 1: Install Dependencies
 
-::::tabs{variant="container" groupId="os"}
-:::tab{label="macOS/Linux"}
-```bash
+:::code{language=bash}
 cd ~/PortfolioAdvisor/app/PortfolioAdvisor
 uv add flask boto3 requests
 cd ../..
-```
 :::
-:::tab{label="Windows"}
-```powershell
-cd ~/PortfolioAdvisor\app\PortfolioAdvisor
-uv add flask boto3 requests
-cd ..\..
-
-```
-:::
-::::
 
 ## Step 2: Verify the Web Client Is Allowed
 
-Lab 3 already configured both Cognito app clients — the M2M client (`COGNITO_CLIENT_ID`) and the web client (`COGNITO_WEB_CLIENT_ID`) — in the `allowedClients` arrays for both the Runtime and Gateway. The web login flow uses the web client's authorization code grant, which is already permitted.
+Lab 2 already configured both Cognito app clients — the M2M client (`COGNITO_CLIENT_ID`) and the web client (`COGNITO_WEB_CLIENT_ID`) — in the `allowedClients` arrays for both the Runtime and Gateway. The web login flow uses the web client's authorization code grant, which is already permitted.
 
 Verify by checking `agentcore/agentcore.json` — you should see two client IDs in each `allowedClients` array:
 
@@ -73,30 +66,21 @@ Verify by checking `agentcore/agentcore.json` — you should see two client IDs 
 :::
 
 :::alert{header="If you only see one client ID" type="warning"}
-If Lab 3 was configured with only the M2M client, add the web client ID now. Retrieve it with:
-`aws ssm get-parameter --name /app/portfolioadvisor/agentcore/web_client_id --query 'Parameter.Value' --output text`
+If Lab 2 was configured with only the M2M client, add the web client ID now. It's available in your environment:
+```bash
+source ~/portfolio-env.sh
+echo $COGNITO_WEB_CLIENT_ID
+```
 Then add it to both `allowedClients` arrays and run `agentcore deploy -y -v`.
 :::
 
 ## Step 3: Create the Frontend Directory
 
-::::tabs{variant="container" groupId="os"}
-:::tab{label="macOS/Linux"}
-```bash
+:::code{language=bash}
 mkdir -p app/PortfolioAdvisor/frontend/templates
 touch app/PortfolioAdvisor/frontend/__init__.py
 touch app/PortfolioAdvisor/frontend/frontend.py
-```
 :::
-:::tab{label="Windows"}
-```powershell
-mkdir app\PortfolioAdvisor\frontend\templates
-New-Item app\PortfolioAdvisor\frontend\__init__.py -Force
-New-Item app\PortfolioAdvisor\frontend\frontend.py -Force
-
-```
-:::
-::::
 
 ## Step 4: Create the Backend
 
@@ -438,21 +422,10 @@ function quickSend(text) { document.getElementById('msgInput').value = text; sen
 
 ## Step 7: Run the Frontend
 
-::::tabs{variant="container" groupId="os"}
-:::tab{label="macOS/Linux"}
-```bash
+:::code{language=bash}
 cd app/PortfolioAdvisor/frontend
 uv run python frontend.py
-```
 :::
-:::tab{label="Windows"}
-```powershell
-cd app\PortfolioAdvisor\frontend
-uv run python frontend.py
-
-```
-:::
-::::
 
 You should see:
 
@@ -495,4 +468,4 @@ AgentCore Runtime (PortfolioAdvisor)
 
 ---
 
-→ Next: [Optional Lab 9: Cost Optimization](../88-optional-cost/) or [Summary](../90-summary/)
+→ Next: [Optional Cost Optimization](../88-optional-cost/) or [Summary](../90-summary/)

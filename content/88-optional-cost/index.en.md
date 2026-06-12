@@ -1,12 +1,17 @@
 ---
-title: "Optional Lab 9: Cost Optimization"
+title: "Optional Lab: Cost Optimization"
 weight: 88
 ---
 
 **Optional** — This lab optimizes session lifecycle, evaluation sampling, and token monitoring for production FSI workloads. Skip it if you're short on time and continue to the Summary.
 
-**Prerequisites:** Labs 1–5 completed (deployed agent with evaluations configured)
-**Estimated time: ~15 minutes**
+**⏱️ Estimated time: ~15 minutes**
+
+:::alert{header="Self-paced lab" type="info"}
+Do this after the live session — **your event account stays live**, so you can continue later today. If you're in a new terminal, run `source ~/portfolio-env.sh` to reload your environment variables.
+
+**Prerequisites:** Labs 1–3 + Evaluations lab completed (deployed agent with evaluations configured)
+:::
 
 ## Overview
 
@@ -86,29 +91,16 @@ The full runtime block should look like:
 
 Deploy the updated configuration:
 
-::::tabs{variant="container" groupId="os"}
-:::tab{label="macOS/Linux"}
-```bash
+:::code{language=bash}
 agentcore validate
 agentcore deploy -y -v
-```
 :::
-:::tab{label="Windows"}
-```powershell
-agentcore validate
-agentcore deploy -y -v
-
-```
-:::
-::::
 
 ## Step 2: Reduce Evaluation Sampling Rate
 
-In Lab 5 you configured 100% evaluation sampling — useful for testing, expensive in production. Reduce it to 20%.
+In the Evaluations lab you configured 100% evaluation sampling — useful for testing, expensive in production. Reduce it to 20%.
 
-::::tabs{variant="container" groupId="os"}
-:::tab{label="macOS/Linux"}
-```bash
+:::code{language=bash}
 # Remove the existing evaluation config (cannot re-add with the same name)
 agentcore remove online-eval --name QualityMonitor -y
 
@@ -121,26 +113,7 @@ agentcore add online-eval \
   --enable-on-create
 
 agentcore deploy -y -v
-```
 :::
-:::tab{label="Windows"}
-```powershell
-# Remove the existing evaluation config (cannot re-add with the same name)
-agentcore remove online-eval --name QualityMonitor -y
-
-# Re-add with 20% sampling
-agentcore add online-eval `
-  --name QualityMonitor `
-  --runtime PortfolioAdvisor `
-  --evaluator Builtin.GoalSuccessRate Builtin.Correctness Builtin.ToolSelectionAccuracy `
-  --sampling-rate 20 `
-  --enable-on-create
-
-agentcore deploy -y -v
-
-```
-:::
-::::
 
 > **Cost impact:** Reducing sampling from 100% to 20% cuts evaluation costs by 80% while maintaining statistical significance. For 1,000+ daily interactions, 20% gives you 200+ evaluated samples per day — more than enough for reliable quality signals.
 
@@ -157,9 +130,7 @@ agentcore deploy -y -v
 
 Token usage is the primary cost driver. Use the AWS CLI to query consumption from the `Bedrock-AgentCore` CloudWatch namespace:
 
-::::tabs{variant="container" groupId="os"}
-:::tab{label="macOS/Linux"}
-```bash
+:::code{language=bash}
 # Invocations for the last hour
 START_TIME=$(python3 -c "from datetime import datetime,timedelta,timezone; print((datetime.now(timezone.utc)-timedelta(hours=1)).strftime('%Y-%m-%dT%H:%M:%S'))")
 END_TIME=$(python3 -c "from datetime import datetime,timezone; print(datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S'))")
@@ -172,25 +143,7 @@ aws cloudwatch get-metric-statistics \
   --period 300 \
   --statistics Sum Average Maximum \
   --output table
-```
 :::
-:::tab{label="Windows"}
-```powershell
-$startTime = (Get-Date).AddHours(-1).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss")
-$endTime   = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss")
-
-aws cloudwatch get-metric-statistics `
-  --namespace "AWS/Bedrock-AgentCore" `
-  --metric-name "Invocations" `
-  --start-time $startTime `
-  --end-time $endTime `
-  --period 300 `
-  --statistics Sum Average Maximum `
-  --output table
-
-```
-:::
-::::
 
 :::alert{header="Typical token ranges per invocation" type="info"}
 | Metric | Typical range | Cost driver |
@@ -206,9 +159,7 @@ aws cloudwatch get-metric-statistics `
 
 Create a CloudWatch dashboard to track token consumption and invocation count over time:
 
-::::tabs{variant="container" groupId="os"}
-:::tab{label="macOS/Linux"}
-```bash
+:::code{language=bash}
 aws cloudwatch put-dashboard \
   --dashboard-name "PortfolioAdvisor-CostMonitor" \
   --dashboard-body '{
@@ -256,65 +207,7 @@ aws cloudwatch put-dashboard \
       }
     ]
   }'
-```
 :::
-:::tab{label="Windows"}
-```powershell
-$dashboardBody = @'
-{
-  "widgets": [
-    {
-      "type": "metric",
-      "x": 0, "y": 0, "width": 12, "height": 6,
-      "properties": {
-        "title": "Invocations and Duration",
-        "metrics": [
-          ["AWS/Bedrock-AgentCore", "Invocations",  {"stat": "Sum", "period": 3600}],
-          ["AWS/Bedrock-AgentCore", "Duration", {"stat": "Average", "period": 3600}]
-        ],
-        "view": "timeSeries",
-        "region": "us-west-2",
-        "period": 3600
-      }
-    },
-    {
-      "type": "metric",
-      "x": 12, "y": 0, "width": 12, "height": 6,
-      "properties": {
-        "title": "Invocation Count",
-        "metrics": [
-          ["AWS/Bedrock-AgentCore", "Invocations", {"stat": "Sum", "period": 3600}]
-        ],
-        "view": "timeSeries",
-        "region": "us-west-2",
-        "period": 3600
-      }
-    },
-    {
-      "type": "metric",
-      "x": 0, "y": 6, "width": 12, "height": 6,
-      "properties": {
-        "title": "Errors and Spend",
-        "metrics": [
-          ["AWS/Bedrock-AgentCore", "Errors",  {"stat": "Sum", "period": 3600}],
-          ["AWS/Bedrock-AgentCore", "SpendAmount", {"stat": "Sum", "period": 3600}]
-        ],
-        "view": "timeSeries",
-        "region": "us-west-2",
-        "period": 3600
-      }
-    }
-  ]
-}
-'@
-
-aws cloudwatch put-dashboard `
-  --dashboard-name "PortfolioAdvisor-CostMonitor" `
-  --dashboard-body $dashboardBody
-
-```
-:::
-::::
 
 Open the dashboard in the CloudWatch console:
 

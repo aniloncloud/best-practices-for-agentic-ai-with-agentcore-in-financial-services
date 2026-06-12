@@ -1,9 +1,15 @@
 ---
-title: "Lab 6: VPC Integration for Private Networking"
-weight: 72
+title: "VPC Networking"
+weight: 70
 ---
 
 **⏱️ Estimated time: ~15 minutes**
+
+:::alert{header="Self-paced lab" type="info"}
+Do this after the live session — **your event account stays live**, so you can continue later today. If you're in a new terminal, run `source ~/portfolio-env.sh` to reload your environment variables.
+
+**Prerequisites:** Labs 1–3 (Deploy to AgentCore Runtime + Connect Tools with Gateway + JWT Auth + Govern Agent Actions with Cedar Policies)
+:::
 
 ## Overview
 
@@ -51,9 +57,7 @@ Two fields in `agentcore.json`, one redeploy, and your agent is network-isolated
 
 The prerequisites CloudFormation stack created a VPC with private subnets, a security group, and VPC endpoints for all required AWS services. Retrieve the resource IDs from SSM Parameter Store:
 
-::::tabs{variant="container" groupId="os"}
-:::tab{label="macOS/Linux"}
-```bash
+:::code{language=bash}
 VPC_ID=$(aws ssm get-parameter \
   --name /app/portfolioadvisor/agentcore/vpc_id \
   --query 'Parameter.Value' --output text)
@@ -74,34 +78,7 @@ echo "VPC ID:         $VPC_ID"
 echo "Subnet 1:       $PRIVATE_SUBNET_1"
 echo "Subnet 2:       $PRIVATE_SUBNET_2"
 echo "Security Group: $SECURITY_GROUP_ID"
-```
 :::
-:::tab{label="Windows"}
-```powershell
-$VPC_ID = aws ssm get-parameter `
-  --name /app/portfolioadvisor/agentcore/vpc_id `
-  --query 'Parameter.Value' --output text
-
-$PRIVATE_SUBNET_1 = aws ssm get-parameter `
-  --name /app/portfolioadvisor/agentcore/private_subnet_1 `
-  --query 'Parameter.Value' --output text
-
-$PRIVATE_SUBNET_2 = aws ssm get-parameter `
-  --name /app/portfolioadvisor/agentcore/private_subnet_2 `
-  --query 'Parameter.Value' --output text
-
-$SECURITY_GROUP_ID = aws ssm get-parameter `
-  --name /app/portfolioadvisor/agentcore/security_group_id `
-  --query 'Parameter.Value' --output text
-
-Write-Host "VPC ID:         $VPC_ID"
-Write-Host "Subnet 1:       $PRIVATE_SUBNET_1"
-Write-Host "Subnet 2:       $PRIVATE_SUBNET_2"
-Write-Host "Security Group: $SECURITY_GROUP_ID"
-
-```
-:::
-::::
 
 You should see four resource identifiers. Keep them — you'll paste them into `agentcore.json` in the next step.
 
@@ -125,7 +102,7 @@ The updated runtime entry should include:
 Replace `<PRIVATE_SUBNET_1>`, `<PRIVATE_SUBNET_2>`, and `<SECURITY_GROUP_ID>` with the actual values printed in Step 1. Leave all other fields — authorizer, gateway, protocol — unchanged.
 
 :::alert{header="CLI Exception: networkMode and networkConfig" type="warning"}
-The `agentcore` CLI does not expose a `--network-mode` flag. This is one of the few cases where a direct `agentcore.json` edit is required — the same pattern used for `authorizerConfiguration` in Lab 3. All other configuration uses the CLI; only these two fields require a manual JSON edit.
+The `agentcore` CLI does not expose a `--network-mode` flag. This is one of the few cases where a direct `agentcore.json` edit is required — the same pattern used for `authorizerConfiguration` in Lab 2. All other configuration uses the CLI; only these two fields require a manual JSON edit.
 :::
 
 ## Step 3: Deploy
@@ -151,11 +128,17 @@ You should see `PortfolioAdvisor` in `READY` state.
 
 ## Step 4: Test Connectivity
 
-Invoke the agent with your bearer token from Lab 3. The session management and JWT auth work identically — only the network path has changed:
+Invoke the agent with your bearer token from Lab 2. The session management and JWT auth work identically — only the network path has changed:
 
-::::tabs{variant="container" groupId="os"}
-:::tab{label="macOS/Linux"}
-```bash
+:::code{language=bash}
+source ~/portfolio-env.sh
+
+TOKEN=$(aws cognito-idp initiate-auth \
+  --auth-flow USER_PASSWORD_AUTH \
+  --client-id $COGNITO_WEB_CLIENT_ID \
+  --auth-parameters USERNAME=workshopuser@example.com,PASSWORD='WorkshopPass1!' \
+  --query 'AuthenticationResult.AccessToken' --output text)
+
 SESSION_VPC=$(python3 -c 'import uuid; print(uuid.uuid4())')
 
 # Local tool — handled entirely within the runtime
@@ -165,23 +148,7 @@ agentcore invoke "What's the current analysis for AAPL?" \
 # Gateway tool — routes through bedrock-agentcore-gateway VPC endpoint
 agentcore invoke "Check the portfolio risk for PORT-003" \
   --session-id $SESSION_VPC --bearer-token "$TOKEN" --stream
-```
 :::
-:::tab{label="Windows"}
-```powershell
-$SESSION_VPC = [guid]::NewGuid().ToString()
-
-# Local tool — handled entirely within the runtime
-agentcore invoke "What's the current analysis for AAPL?" `
-  --session-id $SESSION_VPC --bearer-token "$TOKEN" --stream
-
-# Gateway tool — routes through bedrock-agentcore-gateway VPC endpoint
-agentcore invoke "Check the portfolio risk for PORT-003" `
-  --session-id $SESSION_VPC --bearer-token "$TOKEN" --stream
-
-```
-:::
-::::
 
 Both queries should return the same results as in public mode. The VPC configuration is transparent to your agent code.
 
@@ -203,25 +170,12 @@ The pre-provisioned VPC includes Interface endpoints for all AWS services your a
 
 To confirm ENIs were provisioned in your private subnets:
 
-::::tabs{variant="container" groupId="os"}
-:::tab{label="macOS/Linux"}
-```bash
+:::code{language=bash}
 aws ec2 describe-network-interfaces \
   --filters "Name=group-id,Values=$SECURITY_GROUP_ID" \
   --query 'NetworkInterfaces[].{ID:NetworkInterfaceId,Subnet:SubnetId,Status:Status}' \
   --output table
-```
 :::
-:::tab{label="Windows"}
-```powershell
-aws ec2 describe-network-interfaces `
-  --filters "Name=group-id,Values=$SECURITY_GROUP_ID" `
-  --query 'NetworkInterfaces[].{ID:NetworkInterfaceId,Subnet:SubnetId,Status:Status}' `
-  --output table
-
-```
-:::
-::::
 
 You should see ENIs in both private subnets with `Status: in-use`.
 

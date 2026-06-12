@@ -21,7 +21,11 @@ Your Workshop Studio environment comes **fully pre-provisioned**. The following 
 | **SSM Parameters** | All resource IDs stored under `/app/portfolioadvisor/agentcore/` for easy retrieval |
 | **CloudWatch** | GenAI Observability dashboards pre-configured |
 
-## Orientation (~5 minutes)
+:::alert{header="Your first priority" type="info"}
+**Get to Lab 1 and kick off the deploy.** The deploy takes 2–3 minutes and the lab is written so you read while it runs. Don't spend time here — orientation below takes under 3 minutes.
+:::
+
+## Orientation (~3 minutes)
 
 ### 1. Open VS Code Server
 
@@ -31,37 +35,18 @@ In Workshop Studio, click the **VS Code Server** link in the left sidebar. This 
 
 In VS Code, open a terminal: **Terminal → New Terminal** (or `` Ctrl+` ``).
 
-### 3. Verify Your Workspace
+### 3. Verify Your Workspace and AgentCore CLI
 
-::::tabs{variant="container" groupId="os"}
-:::tab{label="macOS/Linux"}
 ```bash
 cd ~/PortfolioAdvisor
-ls app/PortfolioAdvisor/
-```
-:::
-:::tab{label="Windows"}
-```powershell
-cd $HOME\PortfolioAdvisor
-dir app\PortfolioAdvisor\
-
-```
-:::
-::::
-
-You should see: `main.py`, `mcp_client/`, `model/`, `tool/`, `pyproject.toml`
-
-### 4. Verify the AgentCore CLI
-
-:::code{language=bash}
 agentcore --version
-:::
+```
 
-### 5. Confirm Your Region
+### 4. Confirm Your Region
 
-:::code{language=bash}
+```bash
 aws configure get region
-:::
+```
 
 Expected output: `us-west-2`
 
@@ -69,42 +54,39 @@ Expected output: `us-west-2`
 This workshop runs exclusively in **us-west-2**. If your region is different, run: `export AWS_DEFAULT_REGION=us-west-2`
 :::
 
-### 6. Review the Agent Code
+That's all the orientation you need. The agent code tour happens inside Lab 1's deploy-wait panel — head there now.
 
-Open `app/PortfolioAdvisor/main.py` in VS Code. Notice:
-- Two local tools: `get_stock_analysis()` and `get_compliance_rules()`
-- An MCP client stub (commented out — you'll enable this in Lab 2)
-- An `@app.entrypoint` async generator that creates a Strands Agent and streams responses
-- Simulated financial data (stocks, compliance rules)
+:::alert{header="About the agent code" type="info"}
+`app/PortfolioAdvisor/main.py` is pre-wired for Gateway connectivity. `get_gateway_mcp_client()` returns `None` until a Gateway exists — once Lab 2 creates one, the Gateway connection is live automatically. No code edits are needed for the gateway.
+:::
 
-### 7. Review the AgentCore Configuration
+## Workshop Schedule
 
-Open `agentcore/agentcore.json`. It contains a single runtime definition with the agent's name, entrypoint, and code location. No gateway, auth, or VPC config yet — you'll add those in subsequent labs.
+### Live Session (60 minutes)
 
-## Workshop Structure
+| Segment | Title | Time | What You'll Do |
+|---------|-------|------|----------------|
+| Talk | Intro: AgentCore for Financial Services | ~8 min | Facilitator presents; read [Foundations](../15-foundations/) |
+| [Lab 1](../20-lab1-runtime/) | Deploy to AgentCore Runtime | ~10 min | Deploy pre-built agent, invoke via CLI; read while it deploys |
+| [Lab 2](../30-lab2-gateway/) | Connect Tools with Gateway + JWT Auth | ~18 min | Gateway creation, Lambda tool registration, JWT auth end-to-end |
+| [Lab 3](../50-lab4-governance/) | Govern Agent Actions with Cedar Policies | ~16 min | Cedar policies deny a 5,000-share trade that succeeded in Lab 2 |
+| Buffer | Finish up / questions | ~8 min | Fast finishers: try the restricted-ticker Cedar policy extension |
 
-### Core Labs
-
-| Lab | Title | Time | What You'll Do |
-|-----|-------|------|----------------|
-| — | Foundations (reading) | ~5 min | Agent planning, observability strategy, "no code changes" philosophy |
-| 1 | Runtime | ~15 min | Deploy to cloud |
-| 1B | Observability | ~15 min | Traces, session isolation, token metrics |
-| 2 | Gateway | ~25 min | Centralize tools, credential patterns |
-| 3 | Security | ~20 min | JWT auth on Runtime and Gateway |
-| 4 | Governance | ~25 min | Cedar policies, explainability |
-| 5 | Evaluations | ~15 min | Continuous quality monitoring |
-| 6 | VPC | ~15 min | Private network isolation |
-
-### Optional Labs
+### Self-Paced (after the session — your event stays live)
 
 | Lab | Title | Time | What You'll Do |
 |-----|-------|------|----------------|
-| 2B | Tool Registry | ~20 min | Enterprise tool approval workflow |
-| 7 | Memory | ~20 min | Persistent client memory |
-| 8 | Frontend | ~20 min | Flask chat portal with Cognito login |
-| 9 | Cost Optimization | ~15 min | Session lifecycle, eval sampling |
+| [Observability Deep Dive](../25-lab1b-observability/) | Observability Deep Dive | ~15 min | Traces, session isolation, token metrics, CloudWatch GenAI dashboards |
+| [OAuth Token Flows](../40-lab3-security/) | OAuth Token Flows: M2M & Token Lifecycle | ~20 min | M2M client credentials, token introspection, full lifecycle |
+| [Enterprise Tool Registry](../35-lab2b-tool-registry/) | Enterprise Tool Registry | ~20 min | Tool approval workflow, security review, MCP server registration |
+| [Evaluations](../60-lab5-evaluations/) | Evaluations | ~15 min | Continuous quality monitoring with built-in LLM-as-a-Judge evaluators |
+| [VPC Networking](../70-lab6-vpc/) | VPC Networking | ~15 min | Private subnet isolation, VPC endpoints, PrivateLink |
+| [Memory](../80-optional-memory/) | Add Persistent Memory | ~20 min | SEMANTIC and SUMMARIZATION memory strategies |
+| [Frontend](../85-optional-frontend/) | Build Client Portal | ~20 min | Flask chat frontend with Cognito login |
+| [Cost Optimization](../88-optional-cost/) | Cost Optimization | ~15 min | Session lifecycle, eval sampling, token monitoring |
 
-## Ready?
+:::alert{header="The event stays live after the session" type="info"}
+Everything in the Self-Paced section can be completed later today with this same account. You don't need to rush through any of those labs during the 60-minute live session.
+:::
 
-→ Next: [Foundations: Building Production Agents](../15-foundations/)
+→ Next: [Lab 1: Deploy to AgentCore Runtime](../20-lab1-runtime/)

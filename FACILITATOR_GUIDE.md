@@ -4,19 +4,21 @@
 
 ## Workshop Overview
 
-**Best Practices for Agentic AI with AgentCore in Financial Services** teaches participants how to take a fully assembled AI agent and incrementally harden it for financial services production — adding tools, authentication, governance, observability, evaluations, and network isolation across six focused labs.
+**Best Practices for Agentic AI with AgentCore in Financial Services** (IND306) teaches participants how to take a fully assembled AI agent and incrementally harden it for financial services production — adding tools, authentication, and governance across three live labs in a **60-minute builder session** at AWS NY Summit. The event stays live after the session ends so participants can continue with self-paced labs at their own pace.
 
 The workshop follows a single use case from start to finish: a **capital markets portfolio advisor agent** that handles stock analysis, compliance rule lookups, portfolio risk assessment, and trade execution. All financial data is simulated.
+
+**Session format:** 8 minutes of facilitator talk (front-loaded: CISO five questions, target architecture, before/after Cedar arc, logistics), then 52 contiguous minutes of self-paced hands-on work. There is no facilitator speaking after labs begin — facilitators float for 1:1 help. The lab pages self-narrate. Each live lab contains exactly one `agentcore deploy` paired with an on-page "While this deploys" reading box.
 
 **What Participants Will Learn:** Participants arrive to a pre-provisioned environment — the agent workspace, infrastructure, and credentials are all ready. There is no scaffolding phase. Participants deploy the agent in Lab 1 and spend the remaining time adding production-grade capabilities through configuration and agentcore CLI commands.
 
 **Learning Objectives:**
 - Deploy a pre-built AgentCore agent and verify it produces CloudWatch traces (`agentcore deploy`)
-- Centralize tools by connecting Lambda functions through AgentCore Gateway (JWT passthrough and IAM credential patterns)
-- Secure the agent and gateway with JWT-based Cognito authentication
-- Govern agent actions with deterministic Cedar policies (trade quantity limits, restricted securities) and surface reasoning with Agentic Explainability
-- Monitor agent quality continuously using AgentCore Evaluations and CloudWatch GenAI Observability dashboards
-- Deploy the agent in a VPC with private subnet isolation and VPC endpoints
+- Centralize tools by connecting Lambda functions through an authenticated AgentCore Gateway (JWT passthrough and IAM credential patterns)
+- Secure the agent and gateway with JWT-based Cognito authentication; make the same large trade fail with a 401, then succeed with a valid token
+- Govern agent actions with deterministic Cedar policies (trade quantity limits, restricted securities) — same 5,000-share trade denied without any code change
+- (Self-paced) Monitor agent quality with AgentCore Evaluations and CloudWatch GenAI Observability
+- (Self-paced) Deploy the agent in a VPC with private subnet isolation and VPC endpoints
 
 **Target Audience:** Solutions Architects, Developers, and Technical Decision Makers in financial services. Participants should have basic AWS console navigation and Python experience. Familiarity with financial markets concepts is helpful but not required — all financial data is simulated.
 
@@ -73,56 +75,72 @@ For large events (20+ participants): verify AgentCore Runtime quota headroom at 
 
 The original workshop had participants scaffold, write, and iteratively build the agent code across 10 labs. That model spent the first 30 minutes on project creation and code writing before any cloud deployment.
 
-**The new model pre-provisions everything.** The agent workspace at `~/PortfolioAdvisor/` is fully populated when participants open their browser. Lab 1 is now a 15-minute deploy-and-verify step, not a 30-minute code-writing step.
+**The new model pre-provisions everything.** The agent workspace at `~/PortfolioAdvisor/` is fully populated when participants open their browser. Lab 1 is now a deploy-and-verify step, not a code-writing step.
 
 **Pacing implications:**
 
-- **Lab 1 is shorter by design.** Participants run `agentcore deploy` within the first few minutes. The saved time is for discussion — walk through the project structure, explain what the pre-built tools do, and answer questions about the deployment process before moving on.
-- **There is no `agentcore create` or `agentcore dev` step in the core labs.** The agent already exists. Participants deploy it, then modify configuration (agentcore.json) and redeploy to add capabilities. The only file participants edit is `agentcore.json` — and in some labs, they run CLI commands that update it automatically.
-- **Labs focus on configuration, not construction.** Labs 3 (Gateway), 4 (Security), and 6 (VPC) involve direct `agentcore.json` edits plus one or two CLI commands. Emphasize that this is intentional: in production, governance and network isolation are infrastructure concerns, not application code concerns.
-- **The "no code changes" message lands harder.** Because participants spent Lab 1 looking at the pre-written agent code, demonstrating in Labs 4 and 6 that the code didn't change at all — only the config did — is more impactful.
+- **Lab 1 is shorter by design.** Participants run `agentcore deploy` within the first few minutes. The "While this deploys" reading box covers the CISO questions and code tour.
+- **There is no `agentcore create` or `agentcore dev` step in the core labs.** The agent already exists. Participants deploy it, then modify configuration (agentcore.json) and redeploy to add capabilities.
+- **Labs focus on configuration, not construction.** Lab 2 (Gateway + JWT) and Lab 3 (Cedar governance) involve agentcore.json edits plus CLI commands. Emphasize that in production, governance is an infrastructure concern, not an application code concern.
+- **The "no code changes" message lands harder.** Because participants spent Lab 1 looking at the pre-written agent code, demonstrating in Lab 3 that the code didn't change at all — only the config did — is more impactful.
+
+### 2026-06-11: 60-Minute Builder Session Restructure (AWS NY Summit)
+
+The workshop was restructured from a ~3-hour format to a **60-minute builder session** for AWS NY Summit (IND306). Key changes:
+
+- **Three live deploys, not six.** The session contains exactly three `agentcore deploy` calls (Lab 1, Lab 2, Lab 3). Each is paired with a "While this deploys" on-page reading box.
+- **Gateway born with JWT.** `my-gateway` is now created with `--authorizer-type CUSTOM_JWT` on first creation and never recreated. Previously the gateway was created without auth and then replaced with `my-gateway-secure`.
+- **Env-file replaces SSM copy-paste.** Lab 2 opens with `source ~/portfolio-env.sh`, a single command that loads all SSM parameter values into shell variables. Previously, participants ran multiple `aws ssm get-parameter` commands and manually copied ARNs.
+- **One code edit total.** Lab 2 has participants add `import jwt`, an `extract_user_id()` helper, and auth-forwarding to the invoke call. No other Python edits occur anywhere in the session.
+- **Before/after trade demo.** Lab 2 ends with a 5,000-share MSFT trade succeeding (Gateway has no policy). Live Lab 3 ends with the identical trade denied by Cedar policy — without any code change. This is the session's narrative arc.
+- **Old Lab 3 (Security) became self-paced OAuth deep-dive.** The Cognito auth-code flow, M2M client_credentials flow, and token lifecycle content that was the former Lab 3 is now the self-paced "OAuth Token Flows" page (`40-lab3-security`). The live JWT wiring happens in Lab 2.
+- **Old Lab 4 (Governance) is now live Lab 3.** Cedar policies moved from the third hour into the live session. The content directory is still named `50-lab4-governance/` to preserve build history.
+- **Evaluations and VPC Networking are self-paced.** Former Labs 5 and 6 are now self-paced labs participants continue after the 60-minute session.
+- **All Windows/PowerShell tabs removed.** Browser VS Code on Amazon Linux is the only supported environment. The workspace-bundle in `static/workspace-bundle/` delivers the pre-built project to instances.
 
 ---
 
 ## Recommended Agenda
 
-### Core Format (~3 hours total)
+### 60-Minute Run-of-Show (AWS NY Summit)
 
-| Time | Duration | Activity | Key Focus and Tips |
-|------|----------|----------|--------------------|
-| 0:00–0:10 | 10 min | Welcome and Setup | Introduce objectives, confirm VS Code Server access, verify region is us-west-2. Show the final architecture diagram so participants understand where they're headed. Direct participants to read the **Foundations** page (~5 min read) during this time. |
-| 0:10–0:25 | 15 min | **Lab 1: Runtime** | Run `agentcore deploy`, confirm runtime reaches READY state, invoke the agent. **Tip:** Walk through the project structure while the 2–3 minute deploy runs. Use this time to explain the pre-built tools (`get_stock_analysis`, `get_compliance_rules`). |
-| 0:25–0:40 | 15 min | **Lab 1B: Observability** | Inspect traces in CloudWatch, test session isolation (Session A vs Session B), examine multi-tool traces, review token metrics. **Tip:** If traces haven't appeared yet (1-2 min delay), discuss the three-layer observability model from the Foundations page while waiting. This lab lands the "instrument from day one" message. |
-| 0:40–1:05 | 25 min | **Lab 2: Gateway** | Add Lambda tools via `agentcore add gateway` and `agentcore add gateway-target`. Cover JWT passthrough vs IAM credential patterns. Connect the Gateway MCP client. **Tip:** This is one of the two longest labs. The concept of "MCPifying an existing Lambda without changing its code" is the key insight to land. The Gateway deploy takes 2–3 minutes — use it for Q&A on credential patterns. |
-| 1:05–1:25 | 20 min | **Lab 3: Security** | Add JWT auth via `authorizerConfiguration` in agentcore.json for both Runtime and Gateway. Obtain a Cognito token and invoke with it. **Tip:** Token retrieval can trip participants up. Demo the token fetch live before participants try it. Emphasize that tokens expire after 60 minutes — this matters in Labs 4 through 6. |
-| 1:25–1:35 | 10 min | Break | Remind participants that tokens expire 60 minutes after issuance. Encourage re-fetching the token after the break if they're close to the limit. |
-| 1:35–2:00 | 25 min | **Lab 4: Governance** | Create a Cedar Policy Engine, write `forbid` and `permit` statements, attach in ENFORCE mode. Demo the large trade denial (5000 shares of MSFT). Cover Agentic Explainability (reasoning traces). **Tip:** The denied trade demo is the most impactful moment in the workshop — run it in your own browser first, then let participants try. Emphasize that the agent code didn't change at all. Read the compliance disclaimer note below before this lab. |
-| 2:00–2:15 | 15 min | **Lab 5: Evaluations** | Add `online-eval` with built-in evaluators (GoalSuccessRate, Correctness, ToolSelectionAccuracy) at 100% sampling. Generate test traffic. Check the CloudWatch GenAI Observability dashboard. **Tip:** Kick off test traffic early — evaluation results take a few minutes to appear. |
-| 2:15–2:30 | 15 min | **Lab 6: VPC** | Edit `networkMode` and `vpcConfig` in agentcore.json with pre-provisioned subnet and security group IDs from SSM. Redeploy. Verify agent still responds. **Tip:** VPC deploy takes 3–5 minutes for ENI provisioning. Use the pause for discussion about FSI network isolation requirements. Rollback instructions are in the lab if there are connectivity issues. |
-| 2:30–2:40 | 10 min | Wrap-up and Summary | Review the three FSI security answers (Labs 3, 4, 6). Discuss the path from prototype to production. Share resources. Collect feedback via Workshop Studio survey. |
+| Clock | Duration | Activity | Key Focus and Tips |
+|-------|----------|----------|--------------------|
+| 0:00–0:08 | 8 min | **Facilitator talk** | Front-load: CISO five questions, target architecture diagram, the before/after Cedar arc (5,000-share trade succeeds in Lab 2, denied in Lab 3 without a code change), logistics ("your first command starts a deploy — the page tells you what to read while it runs"). No speaking after this point — facilitators float. |
+| 0:08–0:21 | 13 min | **Lab 1: Deploy to AgentCore Runtime** | Participants run `agentcore deploy` immediately. "While this deploys" box: CISO five questions + code tour. Then: invoke the agent, session-isolation A/B test, one CloudWatch trace. **Tip:** The CDK bootstrap on first deploy adds ~2 min to Lab 1's wait — this is absorbed by the reading box. Point participants to the reading box the moment they start the deploy. |
+| 0:21–0:39 | 18 min | **Lab 2: Connect Tools with Gateway + JWT Auth** | `source ~/portfolio-env.sh` (one paste loads all SSM values), create `my-gateway` with `--authorizer-type CUSTOM_JWT` (never recreated), both Lambda targets, runtime authorizer via python3 heredoc patch, the session's ONE code edit (import jwt + extract_user_id + auth-forwarding invoke), deploy #2. "While this deploys" box: credential patterns + tool schemas. Then: obtain token, bearer invoke, 401 proof, 5,000-share MSFT trade SUCCEEDS (no policy yet). **Tip:** The 401 proof and the succeeding large trade together set up Lab 3's payoff — make sure participants get there. |
+| 0:39–0:55 | 16 min | **Lab 3 (live): Govern Agent Actions with Cedar Policies** | Policy engine attached to `my-gateway` in ENFORCE mode, 2 Cedar policies (trade_quantity_limit < 1000, portfolio_risk_check permit), deploy #3. "While this deploys" box: Cedar-vs-prompt-rules + policy walkthrough. Then: ✅ 500-share trade passes, ❌ the SAME 5,000-share trade DENIED, ✅ risk check passes, audit record. **Tip:** The denied trade is the workshop's single most impactful moment. Circulate during Lab 3 to make sure participants reach the denial test before time is up. |
+| 0:55–1:00 | 5 min | **Buffer / fast-finisher ladder** | Fast-finisher ladder on the Lab 3 page: (1) add a restricted-ticker Cedar policy → (2) Observability Deep Dive → (3) OAuth Token Flows. Facilitators prompt fast finishers to the ladder rather than letting them sit idle. |
 
-**Total core time:** ~2 hours 40 minutes (per agenda above). Foundations reading happens concurrently with setup.
+**Talk-track guidance:** The 8-minute talk should answer the CISO's five questions before participants touch a keyboard. End with the before/after arc: "In Lab 2 you will make a 5,000-share trade succeed. In Lab 3 you will make the exact same trade fail — without touching the agent code." That one sentence motivates the entire session.
 
-### Optional Stretch Labs (~1 additional hour)
+### Self-Paced Labs (event stays live after session)
 
-| Lab | Duration | Topic | When to Use |
-|-----|----------|--------|-------------|
-| **Lab 2B: Tool Registry** | ~20 min | Enterprise tool approval workflow: review security posture of a Market Data MCP server, add to Gateway, verify agent discovers new tools | Run for audiences focused on enterprise tooling governance and platform engineering. Best fit right after Lab 2 but can be done anytime after. |
-| **Lab 7: Memory** | ~20 min | Persistent client memory with SEMANTIC and SUMMARIZATION strategies | Run if group finishes core early or requests memory capabilities |
-| **Lab 8: Frontend** | ~20 min | Flask chat portal with Cognito login and AgentCore REST invocation | Run for audiences who want a complete end-to-end client demo |
-| **Lab 9: Cost Optimization** | ~15 min | Session lifecycle (`sessionConfig`), eval sampling rate tuning (100% → 20%), memory retention | Run for FSI audiences focused on production cost controls |
+Participants continue these at their own pace after the 60-minute session ends. The event account remains accessible.
+
+| Lab | Duration | Topic |
+|-----|----------|-------|
+| **Observability Deep Dive** (`25-lab1b-observability`) | ~15 min | CloudWatch GenAI traces, session isolation deep dive, token metrics, multi-tool trace inspection |
+| **Enterprise Tool Registry** (`35-lab2b-tool-registry`) | ~20 min | Enterprise tool approval workflow: review security posture of a Market Data MCP server, add to Gateway |
+| **OAuth Token Flows: M2M & Token Lifecycle** (`40-lab3-security`) | ~20 min | Cognito M2M client_credentials flow, token lifecycle, auth code flow, web client setup |
+| **Evaluations** (`60-lab5-evaluations`) | ~20 min | Online eval with GoalSuccessRate, Correctness, ToolSelectionAccuracy; CloudWatch GenAI Observability dashboard |
+| **VPC Networking** (`70-lab6-vpc`) | ~20 min | Private subnets, VPC endpoints for AgentCore/Bedrock/SSM, network isolation patterns |
+| **Memory** (`80-optional-memory`) | ~20 min | Persistent client memory with SEMANTIC and SUMMARIZATION strategies |
+| **Frontend** (`85-optional-frontend`) | ~20 min | Flask chat portal with Cognito login and AgentCore REST invocation |
+| **Cost Optimization** (`88-optional-cost`) | ~15 min | Session lifecycle (`sessionConfig`), eval sampling rate tuning (100% → 20%) |
 
 ---
 
 ## Pacing Tips
 
-- **Labs 2 and 4 run longest.** Lab 2 (Gateway) involves the most CLI commands; Lab 4 (Governance) involves the most new concepts (Cedar syntax, ENFORCE mode, Agentic Explainability). Build in buffer around both. If a lab is running over, skip the bonus steps rather than rushing the core.
-- **Lab 1B can be shortened if needed.** If time is tight, the session isolation test (Step 2) and token metrics (Step 4) are the most impactful. The trace inspection (Step 1) and checklist (Step 5) can be compressed to a facilitator demo.
-- **Labs 5 and 6 can be combined if short on time.** Both are 15-minute labs. If the group is running 10–15 minutes behind after Lab 4, present Labs 5 and 6 as a combined "observability and network" block. The key commands in each lab are independent and can run in parallel.
-- **Every `agentcore deploy` takes 2–3 minutes.** Use these pauses for Q&A on the concepts just covered rather than letting participants sit idle. Good prompts: "What other tools would you connect to the Gateway in your workload?" or "What Cedar policies would you write for your compliance requirements?"
-- **VPC deploy (Lab 6) takes 3–5 minutes** for ENI provisioning. This is the longest single pause in the workshop. Use it to walk through the architecture diagram one more time and explain what the VPC endpoints eliminate (public internet paths for Bedrock, SSM, and CloudWatch).
-- **Token expiration: 60 minutes.** Remind the group at the break (between Labs 3 and 4). Participants who took longer on Labs 1–3 or who paused during the break may hit token expiration during Labs 4–6. The fix is one `aws cognito-idp initiate-auth` command — point participants there first when they see authentication errors.
-- **With 20+ participants:** pair faster participants with slower ones during Labs 2 and 4. If a participant falls two or more labs behind, provide the reference `agentcore.json` for the completed lab so they can catch up rather than stay stuck.
+- **No facilitator speaking after the 8-minute mark.** The lab pages self-narrate. Facilitators circulate for 1:1 help only. Resist the urge to address the room — it breaks participants' reading flow.
+- **Lab 2 is the longest live lab (18 min).** It has the most steps: env block, gateway creation, two targets, runtime authorizer patch, one code edit, deploy, token, three invocation tests. If a participant is stuck at the env block or gateway creation, help immediately — falling behind here means missing the Cedar denial payoff in Lab 3.
+- **Lab 3's denied trade is the payoff — protect it.** At the ~0:48 mark, check that participants are at or past the deploy step in Lab 3. Anyone still in Lab 2 should skip to the core steps (the 5,000-share trade test can be done quickly from the reference commands).
+- **Every `agentcore deploy` takes 2–3 minutes.** Each deploy has a "While this deploys" reading box on the page. Point participants to it the moment they start the deploy. This is designed — the reading is load-bearing context for the next steps, not filler.
+- **CDK bootstrap on Lab 1's first deploy adds ~2 min.** The Lab 1 page accounts for this in its reading box. Do not intervene unless the deploy fails outright (see Troubleshooting).
+- **Token expiration: 60 minutes.** In the 60-minute session format there is no break, so token expiration is less likely during the live labs. However, participants continuing into self-paced labs after the session may hit it. The fix is `source ~/portfolio-env.sh` followed by the one-liner re-auth command shown on the Lab 2 and Lab 3 pages. Point participants there first when they see authentication errors.
+- **Fast-finisher ladder.** The Lab 3 page ends with a fast-finisher ladder: (1) restricted-ticker Cedar policy, (2) Observability Deep Dive, (3) OAuth Token Flows. Direct fast finishers there rather than letting them sit idle or distract neighbors.
+- **With 20+ participants:** prioritize 1:1 help for participants stuck on the env block (Lab 2 step 1) or the Cedar policy creation (Lab 3). If a participant falls more than one full lab behind, provide the reference `agentcore.json` for the completed lab so they can catch up.
 
 ---
 
@@ -137,14 +155,14 @@ The original workshop had participants scaffold, write, and iteratively build th
 
 ### FSI-Specific Facilitation Notes
 
-**Compliance disclaimer:** Remind participants at the beginning of the workshop — and again before Lab 4 — that all financial data, compliance rules, and trade policies in this workshop are **simulated for educational purposes only.** The Cedar policies in Lab 4 illustrate how governance works; they do not constitute actual regulatory guidance. Real-world implementations require review by legal and compliance teams.
+**Compliance disclaimer:** Remind participants during the 8-minute talk — and note it again on the Lab 3 (live) page — that all financial data, compliance rules, and trade policies in this workshop are **simulated for educational purposes only.** The Cedar policies in Lab 3 illustrate how governance works; they do not constitute actual regulatory guidance. Real-world implementations require review by legal and compliance teams.
 
-**Audience expectations:** FSI audiences typically arrive with strong opinions about security architecture. Lean into this — acknowledge the concerns and use Labs 3, 4, and 6 as direct answers:
-- "You're worried about unauthorized API calls" → **Lab 3** (JWT authentication on Runtime and Gateway)
-- "You need deterministic trade controls that can't be prompt-injected away" → **Lab 4** (Cedar policies in ENFORCE mode)
-- "Your data cannot leave the private network" → **Lab 6** (VPC isolation with private subnets and VPC endpoints)
+**Audience expectations:** FSI audiences typically arrive with strong opinions about security architecture. Lean into this — acknowledge the concerns and use the live labs as direct answers:
+- "You're worried about unauthorized API calls" → **Lab 2** (JWT authentication on Runtime and Gateway)
+- "You need deterministic trade controls that can't be prompt-injected away" → **Lab 3 (live)** (Cedar policies in ENFORCE mode)
+- "Your data cannot leave the private network" → **VPC Networking** (self-paced; private subnets and VPC endpoints)
 
-**Regulatory context:** When discussing VPC isolation (Lab 6) and policy governance (Lab 4), you can reference SEC Rule 17a-4, FINRA Rule 3110, SOX, and MiFID II as motivating frameworks. Be explicit that this workshop provides architectural patterns — it does not constitute compliance guidance and every firm's requirements differ.
+**Regulatory context:** When discussing VPC isolation (self-paced VPC lab) and policy governance (live Lab 3), you can reference SEC Rule 17a-4, FINRA Rule 3110, SOX, and MiFID II as motivating frameworks. Be explicit that this workshop provides architectural patterns — it does not constitute compliance guidance and every firm's requirements differ.
 
 **FSI architects and technical leads** will frequently ask about Guardrails integration. The answer: Guardrails cannot be attached to AgentCore Runtime or Gateway as infrastructure configuration. To apply Guardrails, use the `guardrailConfig` parameter in the Bedrock Converse API within the agent code itself. See Additional Notes for detail.
 
@@ -152,9 +170,9 @@ The original workshop had participants scaffold, write, and iteratively build th
 
 - **Show the final architecture at the start.** The `static/images/workshop-architecture.png` diagram shows the completed system. Participants retain more when they know where they're heading.
 - **Explain "why" before "how."** Each lab opens with a business problem (e.g., "any caller can invoke the agent without authentication"). Spend 30 seconds on the problem before walking through the solution.
-- **Use the Cedar denial as a live demo.** In Lab 4, walk through the large trade denial (5000 shares of MSFT) in your own browser before participants try it. The visual of the agent explaining it cannot execute the trade — without any code change — is the workshop's single most effective demo moment.
-- **Use the `agentcore deploy` pauses.** Each deploy takes 2–3 minutes. Rather than silence, use this time to ask participants what they would connect to the Gateway next, or what Cedar policies would apply to their workload.
-- **Reinforce the "no code changes" message.** In Labs 4 and 6, emphasize that the agent code didn't change — governance and network isolation were added entirely through configuration. This resonates strongly with organizations that manage production code change processes carefully.
+- **Use the Cedar denial as the session's payoff.** In live Lab 3, the large trade denial (5,000 shares of MSFT) is the moment the entire session builds toward. Ensure your own test environment has reached this point before the session. The visual of the agent explaining it cannot execute the trade — without any code change — is the workshop's single most effective demo moment.
+- **Let the "While this deploys" boxes do the narrating.** Each of the three deploys has a reading box on the page. Do not lecture over it — participants are reading. Use the deploy time to circulate and check progress.
+- **Reinforce the "no code changes" message.** In live Lab 3, emphasize that the agent code didn't change between Lab 2 and Lab 3 — Cedar governance was added entirely through configuration. This resonates strongly with organizations that manage production code change processes carefully.
 - **Reference the pre-provisioned infrastructure as a model.** When participants ask how they would do this in their own environment, the pre-provisioning stack (`static/prereqs.yaml`) is a concrete starting point they can adapt.
 
 ---
@@ -167,17 +185,19 @@ The original workshop had participants scaffold, write, and iteratively build th
 
 **Cause:** The AgentCore CLI uses AWS CDK internally. The first `agentcore deploy` in a given account and region requires CDK to be bootstrapped. Workshop Studio accounts typically have this pre-configured, but it can fail in edge cases.
 
+**Note for Lab 1:** Lab 1 has participants start the deploy immediately and read the "While this deploys" box during the wait. CDK bootstrap adds ~2 minutes to the first deploy and is absorbed by the reading box. No action needed unless the deploy fails outright.
+
 **Fix:**
 1. Run `npx cdk bootstrap aws://ACCOUNT_ID/us-west-2` manually in the `~/PortfolioAdvisor/agentcore/cdk/` directory.
 2. Once bootstrap completes (about 2 minutes), retry `agentcore deploy`.
 
-#### 2. Token Expired in Labs 4–6
+#### 2. Token Expired in Lab 3 (live) or Self-Paced Labs
 
-**Cause:** Cognito access tokens expire after 60 minutes. Participants who spend extra time on earlier labs — or who pause for the break — hit this when they return to Labs 4–6.
+**Cause:** Cognito access tokens expire after 60 minutes. In the 60-minute session, this is unlikely to affect the live labs — tokens obtained in Lab 2 should last through Lab 3. Participants continuing into self-paced labs after the session ends are more likely to hit this.
 
-**Fix:** Re-run the token retrieval command from Lab 3 Step 1 (the `aws cognito-idp initiate-auth` command). Point participants there first whenever they see an authentication error after Lab 3.
+**Fix:** Run `source ~/portfolio-env.sh` to reload env vars, then re-run the one-liner re-auth command shown on the Lab 2 and Lab 3 pages (the `aws cognito-idp initiate-auth` command). Point participants there first whenever they see an authentication error.
 
-**Prevention:** Remind participants at the break (between Labs 3 and 4) that tokens expire after 60 minutes. Encourage them to re-fetch the token if they are close to the limit.
+**Prevention:** The Lab 2 and Lab 3 pages include a note about token lifetime and the re-auth command. For self-paced participants, remind them to re-auth if they take a break between labs.
 
 #### 3. `agentcore` Command Not Found
 
@@ -196,7 +216,7 @@ The original workshop had participants scaffold, write, and iteratively build th
 1. Wait 3–5 minutes after `agentcore deploy` completes. VPC ENI attachment takes longer than a standard deploy.
 2. Run `agentcore status` to confirm the runtime reports READY.
 3. If still failing after 5 minutes, verify the security group allows outbound HTTPS: `aws ec2 describe-security-groups --group-ids $SECURITY_GROUP_ID`.
-4. If VPC issues cannot be resolved quickly, roll back to PUBLIC mode (Lab 6 Step 6 — remove `networkMode` and `vpcConfig` from agentcore.json and redeploy). The conceptual point of Lab 6 can be made without the participant's agent remaining in VPC mode.
+4. If VPC issues cannot be resolved quickly, roll back to PUBLIC mode (remove `networkMode` and `vpcConfig` from agentcore.json and redeploy — the rollback step is documented in the self-paced VPC Networking lab). The conceptual point of the VPC lab can be made without the participant's agent remaining in VPC mode.
 
 #### 5. Model Access Denied on First Agent Invocation
 
@@ -212,50 +232,57 @@ The original workshop had participants scaffold, write, and iteratively build th
 
 ### Module-Specific Issues
 
-**Lab 1 (Runtime):**
+**Lab 1 — Deploy to AgentCore Runtime (live):**
 - If `agentcore deploy` completes but `agentcore status` shows FAILED, check CloudWatch Logs for the Lambda deployment function for CDK errors. CDK bootstrap (issue 1 above) is the most common cause.
 - If traces don't appear in CloudWatch after invocation, wait 1–2 minutes — CloudWatch GenAI Observability can have a short ingestion delay. Confirm the agent was invoked successfully (the CLI should print the agent response) before investigating traces.
 - If the VS Code Server terminal opens to a different directory, navigate to `~/PortfolioAdvisor/` before running agentcore commands.
 
-**Lab 2 (Gateway):**
-- If the Lambda ARN retrieval fails, verify the pre-provisioning CloudFormation stack completed successfully: `aws ssm get-parameter --name /app/portfolioadvisor/agentcore/portfolio_risk_lambda_arn`.
+**Lab 2 — Connect Tools with Gateway + JWT Auth (live):**
+- If `source ~/portfolio-env.sh` fails or env vars are empty, verify the pre-provisioning CloudFormation stack completed successfully: `aws ssm get-parameter --name /app/portfolioadvisor/agentcore/portfolio_risk_lambda_arn`.
+- The gateway `my-gateway` is created once with `--authorizer-type CUSTOM_JWT`. It is never removed and recreated during the session. If a participant accidentally removed it, recreate it with the same flags.
 - If the gateway target fails to add, confirm the Lambda ARN is valid and the IAM role has permission to invoke it. The CDK-generated role should have this automatically.
 - If the agent doesn't discover the Gateway tool after redeployment, confirm `AGENTCORE_GATEWAY_MY_GATEWAY_URL` is in the agent's environment (injected automatically when the gateway is linked to the runtime).
 - If the tool schema JSON fails with "Attribute type null is not yet supported", the `inputSchema` has a nested `"json"` wrapper. The `inputSchema` must have `"type": "object"` directly inside it, not wrapped in a `"json"` object.
+- If JWT auth is configured but invocations are still accepted without a token, check that `agentcore deploy` ran after the agentcore.json patch. The `authorizerType` field is only applied on deploy.
 
-**Lab 3 (Security):**
-- If JWT auth is configured but invocations are still accepted without a token, check that `agentcore deploy` ran after editing agentcore.json. The `authorizerType` field is only applied on deploy.
-- If `agentcore validate` fails after adding `authorizerConfiguration`, check for JSON syntax errors — missing commas between fields are common.
-- When securing the Gateway, the original `my-gateway` must be removed and redeployed before creating `my-gateway-secure`. If the remove fails, check that no deployment is in progress.
-- The `mcp_client/client.py` environment variable must match the new gateway name exactly: `AGENTCORE_GATEWAY_MY_GATEWAY_SECURE_URL` (not `MY_GATEWAY_URL`).
-
-**Lab 4 (Governance):**
+**Lab 3 (live) — Govern Agent Actions with Cedar Policies:**
 - Cedar policy action names use **triple underscores**: `ExecuteTrade___execute_trade` and `PortfolioRiskCheck___check_portfolio_risk`. A double-underscore or single-underscore will silently create a policy that never matches.
-- After attaching the Policy Engine in ENFORCE mode, all tools behind the Gateway are subject to default-deny. If the portfolio risk check starts failing, it means `portfolio_risk_check_policy` was not created or not deployed.
+- After attaching the Policy Engine in ENFORCE mode, all tools behind the Gateway are subject to default-deny. If the portfolio risk check starts failing, it means `portfolio_risk_check_policy` was not created or not attached.
 - When creating Cedar policies, the `--validation-mode IGNORE_ALL_FINDINGS` flag is required because the Cedar validator doesn't know the principals exist at creation time.
-- Agentic Explainability reasoning traces appear in CloudWatch under the same trace as the invocation. If they don't appear, verify the lab's explainability configuration block was added to agentcore.json and the runtime was redeployed.
+- **Policy engine attachment issue (if Test 2 is not denied):** A troubleshooting expander at the bottom of the Lab 3 page contains the manual attachment workaround: `put-role-policy` + `update-gateway` commands. Facilitators should pre-verify this flow in a test event before delivery — if the standard `agentcore` attach command doesn't wire the engine to the gateway, the manual commands are the fix.
+- Agentic Explainability reasoning traces appear in CloudWatch under the same trace as the invocation. If they don't appear, verify the explainability configuration block was added to agentcore.json and the runtime was redeployed.
 
-**Lab 5 (Evaluations):**
+**Self-Paced: Observability Deep Dive (`25-lab1b-observability`):**
+- This lab is fully self-paced. Participants who finish the live labs early are directed here via the fast-finisher ladder on Lab 3.
+- If traces don't appear, see Lab 1 notes above (ingestion delay).
+
+**Self-Paced: OAuth Token Flows — M2M & Token Lifecycle (`40-lab3-security`):**
+- This is the former Lab 3 (Security) page, restructured as a self-paced deep dive. The live JWT wiring now happens in Lab 2. This page covers the M2M client_credentials flow, token lifecycle, and auth code flow in depth.
+- If JWT auth is configured but invocations are accepted without a token, check that `agentcore deploy` ran after editing agentcore.json.
+- If `agentcore validate` fails after adding `authorizerConfiguration`, check for JSON syntax errors — missing commas between fields are common.
+
+**Self-Paced: Evaluations (`60-lab5-evaluations`):**
 - If traces don't appear in CloudWatch, confirm the agent was deployed (not just running locally). Evaluations are only active for cloud-deployed runtimes.
 - Evaluation results take a few minutes to appear after traffic is generated. Generate test traffic at the start of the lab and check the dashboard toward the end.
 - If adding a second `QualityMonitor` fails with a duplicate name error, the previous configuration must be paused first: `agentcore pause online-eval QualityMonitor`.
 
-**Lab 6 (VPC):**
+**Self-Paced: VPC Networking (`70-lab6-vpc`):**
 - The `networkMode` and `vpcConfig` fields must be edited directly in agentcore.json. There is no `--network-mode` CLI flag. This is explicitly documented in the lab.
 - If VPC deploy fails with "invalid subnet", verify the subnet IDs retrieved from SSM are for the **private** subnets (not public). Private subnets have no direct route to the Internet Gateway.
 - If the agent responds after VPC deployment but latency increased noticeably, this is expected — traffic now routes through VPC endpoints. It is not a failure.
+- Gateway timeout after VPC deployment: ENIs may still be provisioning. Wait 3–5 minutes after `agentcore deploy` completes, run `agentcore status` to confirm READY. If still failing, verify the security group allows outbound HTTPS (port 443). Rollback: remove `networkMode` and `vpcConfig` from agentcore.json and redeploy.
 
-**Optional Lab 7 (Memory):**
+**Self-Paced: Memory (`80-optional-memory`):**
 - Memory requires cloud deployment — `agentcore dev` does not use AgentCore Memory.
 - If the memory recall test returns "I don't know anything about you", the memory extraction job may not have finished. Wait 1–2 minutes and retry with a new session ID.
 - If deployment fails with a header-related error, check that `requestHeaderAllowlist` was added to the runtime entry in agentcore.json.
 
-**Optional Lab 8 (Frontend):**
+**Self-Paced: Frontend (`85-optional-frontend`):**
 - If the login redirect loops back to the login page without signing in, confirm the web client ID was added to BOTH `allowedClients` arrays in agentcore.json — one in the runtime's `authorizerConfiguration` and one in the gateway's `authorizerConfiguration`.
 - If the Flask app starts but the Runtime ARN shows NOT FOUND, the `deployed-state.json` file is either missing or doesn't contain the PortfolioAdvisor runtime entry. Run `agentcore status` to verify the runtime is deployed.
 - If the chat sends a message but gets a 401 response, the session-stored token has expired. Log out and log back in via the Cognito hosted UI.
 
-**Optional Lab 9 (Cost Optimization):**
+**Self-Paced: Cost Optimization (`88-optional-cost`):**
 - The `sessionConfig` block is a direct agentcore.json edit — no CLI flag exists for session lifecycle parameters.
 - When re-adding `QualityMonitor` with 20% sampling, the old configuration must be paused first.
 
@@ -288,7 +315,7 @@ The original workshop had participants scaffold, write, and iteratively build th
 - [Amazon Bedrock AgentCore Documentation](https://docs.aws.amazon.com/bedrock-agentcore/)
 - [AgentCore CLI GitHub](https://github.com/aws/agentcore-cli)
 - [AgentCore Samples (GitHub)](https://github.com/awslabs/agentcore-samples)
-- [Cedar Policy Language](https://www.cedarpolicy.com/) — the open-source authorization language used in Lab 4
+- [Cedar Policy Language](https://www.cedarpolicy.com/) — the open-source authorization language used in Lab 3 (live governance lab)
 - [Strands Agents SDK](https://strandsagents.com/) — the Python agent framework used throughout the workshop
 - [CloudWatch GenAI Observability for Bedrock AgentCore](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/CloudWatch-GenAI-Observability-AgentCore.html)
 
@@ -296,11 +323,12 @@ The original workshop had participants scaffold, write, and iteratively build th
 
 ## Post-Event Actions
 
-- Terminate the event in Workshop Studio — cleanup is automatic.
+- Terminate the event in Workshop Studio — cleanup is automatic. The event staying live for self-paced work is intentional; terminate only when self-paced time has ended.
 - Remind participants who ran the workshop in their own AWS account to: run `agentcore remove all` from the `~/PortfolioAdvisor/` directory, then delete the pre-provisioning CloudFormation stack.
 - Share the Resources links above with participants after the event.
 - Collect feedback via the Workshop Studio survey.
 - Update this guide if you found new issues or better approaches during delivery.
+- Note any participants who hit the policy-engine attachment issue (Lab 3 troubleshooting expander) — if it occurs consistently, escalate to the workshop team to investigate the standard attach command.
 
 ---
 
@@ -311,5 +339,5 @@ The original workshop had participants scaffold, write, and iteratively build th
 - **Framework-agnostic design, Python-specific code.** The workshop uses the Strands Agents SDK and Python 3.13 throughout. The AgentCore CLI supports other frameworks (LangChain, CrewAI, Google ADK, OpenAI Agents SDK), but all code samples are Python.
 - **Guardrails and AgentCore infrastructure:** A common question from FSI participants is whether Bedrock Guardrails can be attached to AgentCore Runtime or Gateway at the infrastructure level (similar to how VPC endpoints are configured). The answer is **no** — Guardrails are not attachable to AgentCore Runtime or Gateway as infrastructure. To use Guardrails, configure the `guardrailConfig` parameter in the Bedrock Converse API calls within the agent code itself (in `model/load.py` or wherever the Bedrock client is configured).
 - **Session ID minimum length:** AgentCore Runtime requires session IDs to be at least 33 characters. The workshop uses `uuid.uuid4()` (36 characters) throughout to satisfy this requirement. Shorter custom session IDs will be rejected with a validation error.
-- **`agentcore.json` direct edits:** Three configuration areas require direct JSON file edits rather than CLI flags: `authorizerConfiguration` (Lab 3), `networkMode` and `vpcConfig` (Lab 6), and `sessionConfig` (Optional Lab 9). All other configuration is managed through CLI commands. Each lab that requires a direct edit includes an inline alert flagging this as an exception to the normal CLI workflow.
+- **`agentcore.json` direct edits:** Three configuration areas require direct JSON file edits rather than CLI flags: `authorizerConfiguration` (Lab 2, applied via python3 heredoc patch), `networkMode` and `vpcConfig` (self-paced VPC Networking lab), and `sessionConfig` (self-paced Cost Optimization lab). All other configuration is managed through CLI commands. Each lab that requires a direct edit includes an inline alert flagging this as an exception to the normal CLI workflow.
 - **Cedar triple-underscore naming:** Cedar policy action names use three underscores as a separator between the Gateway target name and the tool function name. For example: `ExecuteTrade___execute_trade` and `PortfolioRiskCheck___check_portfolio_risk`. Using two underscores or one underscore will silently create a policy that never matches any action.

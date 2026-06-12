@@ -11,6 +11,23 @@ Instructions for running the AgentCore CLI Workshop in your own AWS account.
 
 ⚠️ **Important:** Running this workshop in your own environment will incur costs. Examples include Amazon Bedrock inference costs, AgentCore Runtime, Memory, and Gateway resources, and CloudFormation/CDK deployments. We recommend checking the official pricing pages, monitoring costs, and tearing down all resources when finished.
 
+## Workshop Structure
+
+This workshop is designed as a **60-minute live session** followed by **self-paced continuation**:
+
+**Live session (Labs 1–3):**
+- Lab 1: Deploy to AgentCore Runtime
+- Lab 2: Connect Tools with Gateway + JWT Auth
+- Lab 3: Govern Agent Actions with Cedar Policies
+
+**Self-paced (continue after the session at your own pace):**
+- Observability Deep Dive
+- OAuth Token Flows: M2M & Token Lifecycle
+- Enterprise Tool Registry
+- Evaluations: Evaluate Agent Quality
+- VPC Networking
+- Optional: Memory, Frontend, Cost Optimization
+
 ## Requirements
 
 ### Local machine
@@ -33,51 +50,23 @@ Instructions for running the AgentCore CLI Workshop in your own AWS account.
 
 Download from https://nodejs.org/ or use a version manager. Node 22 (LTS) is recommended: the AWS SDK for JavaScript v3 used by the AgentCore CLI requires Node >= 22 for releases after early January 2027.
 
-::::tabs{variant="container" groupId="os"}
-:::tab{label="macOS/Linux"}
-```bash
+:::code{language=bash}
 # Using nvm
 nvm install 22
 nvm use 22
 
 # Verify
 node --version
-```
 :::
-:::tab{label="Windows"}
-```powershell
-# Using nvm-windows (https://github.com/coreybutler/nvm-windows)
-nvm install 22
-nvm use 22
-
-# Verify
-node --version
-
-```
-:::
-::::
 
 ### 2. Install uv (Python package manager)
 
-::::tabs{variant="container" groupId="os"}
-:::tab{label="macOS/Linux"}
-```bash
+:::code{language=bash}
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Verify
 uv --version
-```
 :::
-:::tab{label="Windows"}
-```powershell
-powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
-
-# Verify
-uv --version
-
-```
-:::
-::::
 
 ### 3. Install AgentCore CLI
 
@@ -99,20 +88,9 @@ pip uninstall bedrock-agentcore-starter-toolkit -y
 
 Then refresh your shell's command cache:
 
-::::tabs{variant="container" groupId="os"}
-:::tab{label="macOS/Linux"}
-```bash
+:::code{language=bash}
 hash -r
-```
 :::
-:::tab{label="Windows"}
-```powershell
-# PowerShell doesn't cache commands — no action needed
-
-```
-:::
-::::
-
 
 ### 4. Install Kiro IDE
 
@@ -132,27 +110,13 @@ All commands from this point forward should be run in Kiro's integrated terminal
 
 Configure your AWS CLI with credentials that have the required permissions:
 
-::::tabs{variant="container" groupId="os"}
-:::tab{label="macOS/Linux"}
-```bash
+:::code{language=bash}
 aws configure
 # Or use environment variables:
 export AWS_ACCESS_KEY_ID=<your-access-key>
 export AWS_SECRET_ACCESS_KEY=<your-secret-key>
-export AWS_DEFAULT_REGION=us-east-1
-```
+export AWS_DEFAULT_REGION=us-west-2
 :::
-:::tab{label="Windows"}
-```powershell
-aws configure
-# Or use environment variables:
-$env:AWS_ACCESS_KEY_ID = "<your-access-key>"
-$env:AWS_SECRET_ACCESS_KEY = "<your-secret-key>"
-$env:AWS_DEFAULT_REGION = "us-east-1"
-
-```
-:::
-::::
 
 ### 6. Verify setup
 
@@ -323,23 +287,11 @@ Click the button below to open the AWS CloudFormation console with the stack rea
 
 You can verify the stack created successfully:
 
-::::tabs{variant="container" groupId="os"}
-:::tab{label="macOS/Linux"}
-```bash
+:::code{language=bash}
 aws cloudformation describe-stacks \
   --stack-name agentcore-workshop-prereqs \
   --query 'Stacks[0].StackStatus' --output text
-```
 :::
-:::tab{label="Windows"}
-```powershell
-aws cloudformation describe-stacks `
-  --stack-name agentcore-workshop-prereqs `
-  --query 'Stacks[0].StackStatus' --output text
-
-```
-:::
-::::
 
 ## Enable Transaction Search (for Observability)
 
@@ -360,30 +312,17 @@ Toggle **Enable Transaction Search** and click **Save**:
 
 **Option B: Via AWS CLI**
 
-::::tabs{variant="container" groupId="os"}
-:::tab{label="macOS/Linux"}
-```bash
+:::code{language=bash}
 aws xray update-indexing-rule \
-  --region us-east-1 \
+  --region us-west-2 \
   --name Default \
   --rule '{"Probabilistic": {"DesiredSamplingPercentage": 100}}'
-```
 :::
-:::tab{label="Windows"}
-```powershell
-aws xray update-indexing-rule `
-  --region us-east-1 `
-  --name Default `
-  --rule '{"Probabilistic": {"DesiredSamplingPercentage": 100}}'
-
-```
-:::
-::::
 
 To verify it was enabled:
 
 :::code{language=bash}
-aws xray get-indexing-rules --region us-east-1
+aws xray get-indexing-rules --region us-west-2
 :::
 
 The `DesiredSamplingPercentage` should be `100.0`.

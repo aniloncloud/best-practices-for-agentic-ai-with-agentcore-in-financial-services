@@ -1,9 +1,15 @@
 ---
-title: "Lab 5: Evaluate Agent Quality"
-weight: 62
+title: "Evaluations: Evaluate Agent Quality"
+weight: 65
 ---
 
 **⏱️ Estimated time: ~15 minutes**
+
+:::alert{header="Self-paced lab" type="info"}
+Do this after the live session — **your event account stays live**, so you can continue later today. If you're in a new terminal, run `source ~/portfolio-env.sh` to reload your environment variables.
+
+**Prerequisites:** Labs 1–3 (Deploy to AgentCore Runtime + Connect Tools with Gateway + JWT Auth + Govern Agent Actions with Cedar Policies)
+:::
 
 ## Overview
 
@@ -52,36 +58,31 @@ agentcore invoke ──▶ AgentCore Runtime ──▶ Gateway ──▶ Lambda
 ## Step 1: Refresh Your Token (if needed)
 
 :::alert{header="JWT Token Required" type="warning"}
-All invocations require a valid Cognito JWT (`$TOKEN`). If your token has expired or you're in a new terminal, re-run the token retrieval commands from **Lab 3: Secure with JWT** before continuing.
+All invocations require a valid Cognito JWT (`$TOKEN`). If your token has expired or you're in a new terminal, source your environment and re-run the token retrieval commands from Lab 2 before continuing.
+:::
+
+:::code{language=bash}
+source ~/portfolio-env.sh
+
+TOKEN=$(aws cognito-idp initiate-auth \
+  --auth-flow USER_PASSWORD_AUTH \
+  --client-id $COGNITO_WEB_CLIENT_ID \
+  --auth-parameters USERNAME=workshopuser@example.com,PASSWORD='WorkshopPass1!' \
+  --query 'AuthenticationResult.AccessToken' --output text)
 :::
 
 ## Step 2: Configure Online Evaluation
 
 Add an online evaluation configuration that monitors your PortfolioAdvisor agent with all three built-in evaluators:
 
-::::tabs{variant="container" groupId="os"}
-:::tab{label="macOS/Linux"}
-```bash
+:::code{language=bash}
 agentcore add online-eval \
   --name QualityMonitor \
   --runtime PortfolioAdvisor \
   --evaluator Builtin.GoalSuccessRate Builtin.Correctness Builtin.ToolSelectionAccuracy \
   --sampling-rate 100 \
   --enable-on-create
-```
 :::
-:::tab{label="Windows"}
-```powershell
-agentcore add online-eval `
-  --name QualityMonitor `
-  --runtime PortfolioAdvisor `
-  --evaluator Builtin.GoalSuccessRate Builtin.Correctness Builtin.ToolSelectionAccuracy `
-  --sampling-rate 100 `
-  --enable-on-create
-
-```
-:::
-::::
 
 You should see:
 :::code{language=bash showCopyAction=false}
@@ -116,9 +117,7 @@ agentcore resume online-eval QualityMonitor
 
 Send five varied queries to give the evaluators representative data to assess:
 
-::::tabs{variant="container" groupId="os"}
-:::tab{label="macOS/Linux"}
-```bash
+:::code{language=bash}
 SESSION_EVAL=$(python3 -c 'import uuid; print(uuid.uuid4())')
 
 # Stock analysis
@@ -140,35 +139,7 @@ agentcore invoke "I'm looking at TSLA — what's the risk level? Also check the 
 # General capabilities
 agentcore invoke "What kind of investment analysis can you provide? List your capabilities." \
   --session-id $SESSION_EVAL --bearer-token "$TOKEN" --stream
-```
 :::
-:::tab{label="Windows"}
-```powershell
-$SESSION_EVAL = [guid]::NewGuid().ToString()
-
-# Stock analysis
-agentcore invoke "What's the current analysis for AAPL? What are the key metrics?" `
-  --session-id $SESSION_EVAL --bearer-token "$TOKEN" --stream
-
-# Compliance rules
-agentcore invoke "What are the compliance rules for options trading? What approvals are needed?" `
-  --session-id $SESSION_EVAL --bearer-token "$TOKEN" --stream
-
-# Portfolio risk via Gateway
-agentcore invoke "Check the portfolio risk for PORT-001" `
-  --session-id $SESSION_EVAL --bearer-token "$TOKEN" --stream
-
-# Multi-tool query
-agentcore invoke "I'm looking at TSLA — what's the risk level? Also check the risk for portfolio PORT-005" `
-  --session-id $SESSION_EVAL --bearer-token "$TOKEN" --stream
-
-# General capabilities
-agentcore invoke "What kind of investment analysis can you provide? List your capabilities." `
-  --session-id $SESSION_EVAL --bearer-token "$TOKEN" --stream
-
-```
-:::
-::::
 
 :::alert{header="Processing Delay" type="info"}
 Evaluation results take a few minutes to process after interactions are generated. Continue to the next step, then return to view results.
@@ -178,25 +149,12 @@ Evaluation results take a few minutes to process after interactions are generate
 
 In addition to continuous online evaluation, you can evaluate historical traces on demand:
 
-::::tabs{variant="container" groupId="os"}
-:::tab{label="macOS/Linux"}
-```bash
+:::code{language=bash}
 agentcore run eval \
   --runtime PortfolioAdvisor \
   --evaluator Builtin.GoalSuccessRate Builtin.Correctness \
   --days 1
-```
 :::
-:::tab{label="Windows"}
-```powershell
-agentcore run eval `
-  --runtime PortfolioAdvisor `
-  --evaluator Builtin.GoalSuccessRate Builtin.Correctness `
-  --days 1
-
-```
-:::
-::::
 
 This evaluates all traces from the last day using the specified evaluators — useful for retroactive analysis after a system prompt change.
 
@@ -244,7 +202,7 @@ Client (with JWT token)
 Cognito validates token
     ↓
 AgentCore Runtime (PortfolioAdvisor)
-    ├── Cedar policy enforcement (Lab 4)
+    ├── Cedar policy enforcement (Lab 3)
     ├── Local tools: get_stock_analysis(), get_compliance_rules()
     └── MCP Client → AgentCore Gateway → Lambda: check_portfolio_risk
                           ↓
@@ -287,6 +245,4 @@ The evaluators now automatically sample sessions, score them with LLM-as-a-Judge
 
 ### What's Next
 
-In Lab 6, you'll deploy your agent inside a VPC for private networking — ensuring traffic never traverses the public internet.
-
-→ Next: [Lab 6: VPC Integration for Private Networking](../70-lab6-vpc/)
+→ Continue with: [VPC Networking](../70-lab6-vpc/) | [Memory](../80-optional-memory/) | [Cost Optimization](../88-optional-cost/)

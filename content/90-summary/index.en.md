@@ -7,27 +7,27 @@ weight: 90
 
 Over the course of this workshop, you deployed a production-ready portfolio advisor agent using the AgentCore CLI:
 
-### Core Labs
+### Live Session Labs (60 minutes)
 
 | Lab | What You Did | AgentCore Services |
 |-----|-------------|-------------------|
 | Foundations | Learned agent planning, observability strategy, "no code changes" philosophy | (reading — no services) |
-| 1 | Deployed pre-built agent to cloud | AgentCore Runtime |
-| 1B | Explored traces, session isolation, token metrics, CloudWatch dashboards | CloudWatch GenAI Observability |
-| 2 | Centralized tools via Gateway, learned JWT passthrough and IAM credential patterns | AgentCore Gateway |
-| 3 | Secured Runtime and Gateway with Cognito JWT authentication | AgentCore Identity |
-| 4 | Added Cedar policies for trade limits and restricted tickers, explored agentic explainability | AgentCore Policy |
-| 5 | Configured continuous quality monitoring with built-in evaluators | AgentCore Evaluations |
-| 6 | Deployed agent into VPC with private subnet isolation and VPC endpoints | AgentCore Runtime (VPC mode) |
+| Lab 1: Deploy to AgentCore Runtime | Deployed pre-built agent to cloud | AgentCore Runtime |
+| Lab 2: Connect Tools with Gateway + JWT Auth | Centralized tools via Gateway with JWT authentication and IAM credential patterns | AgentCore Gateway + Identity |
+| Lab 3: Govern Agent Actions with Cedar Policies | Added Cedar policies for trade limits and restricted tickers, explored agentic explainability | AgentCore Policy |
 
-### Optional Labs
+### Self-Paced Labs (continue after the session)
 
 | Lab | What You Did | AgentCore Services |
 |-----|-------------|-------------------|
-| 2B | Reviewed and approved a Market Data MCP server through enterprise tool governance workflow | AgentCore Gateway (Registry) |
-| 7 | Added persistent memory with SEMANTIC and SUMMARIZATION strategies | AgentCore Memory |
-| 8 | Built a web chat interface with Cognito login connected to the deployed agent | All services combined |
-| 9 | Optimized session lifecycle, evaluation sampling rate, and built a cost monitoring dashboard | Cost optimization |
+| Observability Deep Dive | Explored traces, session isolation, token metrics, CloudWatch dashboards | CloudWatch GenAI Observability |
+| OAuth Token Flows | Deep dive into M2M token flows and token lifecycle management | AgentCore Identity |
+| Enterprise Tool Registry | Reviewed and approved a Market Data MCP server through enterprise tool governance workflow | AgentCore Gateway (Registry) |
+| Evaluations | Configured continuous quality monitoring with built-in evaluators | AgentCore Evaluations |
+| VPC Networking | Deployed agent into VPC with private subnet isolation and VPC endpoints | AgentCore Runtime (VPC mode) |
+| Memory | Added persistent memory with SEMANTIC and SUMMARIZATION strategies | AgentCore Memory |
+| Frontend | Built a web chat interface with Cognito login connected to the deployed agent | All services combined |
+| Cost Optimization | Optimized session lifecycle, evaluation sampling rate, and built a cost monitoring dashboard | Cost optimization |
 
 ## Key Takeaways
 
