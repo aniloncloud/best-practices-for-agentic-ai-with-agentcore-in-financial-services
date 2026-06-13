@@ -1497,7 +1497,7 @@ Resources:
           su - ec2-user -c "nvm alias default 22"
           
           # Install agentcore CLI and CDK dependencies
-          su - ec2-user -c "npm install -g @aws/agentcore"
+          su - ec2-user -c "npm install -g @aws/agentcore@preview"
           su - ec2-user -c "cd /home/ec2-user/workspace/my-workspace/agentcore/cdk && npm install"
 
 
