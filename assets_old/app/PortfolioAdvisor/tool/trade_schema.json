@@ -1,0 +1,28 @@
+[
+  {
+    "name": "execute_trade",
+    "description": "Execute a stock trade. Requires the ticker symbol, number of shares, order type (market or limit), and a reason for the trade.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "ticker": {
+          "type": "string",
+          "description": "Stock ticker symbol (e.g., AAPL, MSFT, JPM)"
+        },
+        "quantity": {
+          "type": "integer",
+          "description": "Number of shares to trade"
+        },
+        "order_type": {
+          "type": "string",
+          "description": "Order type: 'market' or 'limit'"
+        },
+        "reason": {
+          "type": "string",
+          "description": "Reason for the trade"
+        }
+      },
+      "required": ["ticker", "quantity", "order_type", "reason"]
+    }
+  }
+]
