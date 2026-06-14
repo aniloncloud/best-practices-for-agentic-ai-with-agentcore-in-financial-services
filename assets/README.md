@@ -1,104 +1,44 @@
-# AgentCore Project
+# Participant workspace seed (`assets/`) — SOURCE OF TRUTH
 
-This project was created with the [AgentCore CLI](https://github.com/aws/agentcore-cli).
+This directory **is** the agent workspace every participant gets at `~/PortfolioAdvisor/`.
+At provision time the devbox downloads this content into `my-workspace/`, so the
+layout here maps 1:1 onto the participant's project root.
 
-## Project Structure
+## What belongs here
 
-```
-my-project/
-├── AGENTS.md               # AI coding assistant context
-├── agentcore/
-│   ├── agentcore.json      # Project config (agents, memories, credentials, gateways, evaluators)
-│   ├── aws-targets.json    # Deployment targets (account + region)
-│   ├── .env.local          # Secrets — API keys (gitignored)
-│   ├── .llm-context/       # TypeScript type definitions for AI assistants
-│   │   ├── agentcore.ts    # AgentCoreProjectSpec types
-│   │   ├── aws-targets.ts  # Deployment target types
-│   │   └── mcp.ts          # Gateway and MCP tool types
-│   └── cdk/                # CDK infrastructure (@aws/agentcore-cdk)
-├── app/                    # Agent application code
-└── evaluators/             # Custom evaluator code (if any)
-```
+- `app/PortfolioAdvisor/harness.json` — the declarative agent (model, system prompt,
+  tools, skills). **This is the entire agent definition.**
+- `app/PortfolioAdvisor/tool/*.json` — JSON-schema tool definitions used by Lab 2
+  (Gateway targets) and Lab 2b (the Agent Registry record descriptor).
+- `AGENTS.md`, `README.md` — docs that ship to the workspace.
 
-## Getting Started
+## What must NOT be here
 
-### Prerequisites
+- **No `main.py` / `model/` / `mcp_client/` / `pyproject.toml`** — those are a *code agent*.
+  This workshop is harness-based. A code agent here makes Lab 1 `agentcore deploy` fail
+  with `CDK synth failed: pyproject.toml not found`.
+- **No `agentcore/` directory.** The devbox generates `agentcore/` (config + CDK) at boot
+  with `agentcore create --no-agent` + `agentcore add harness`, so the CDK always matches
+  the installed CLI. It's gitignored here (`assets/agentcore/`) to prevent accidental commits.
 
-- **Node.js** 20.x or later
-- **Python 3.10+** and **uv** for Python agents ([install uv](https://docs.astral.sh/uv/getting-started/installation/))
-- **AWS credentials** configured (`aws configure` or environment variables)
-- **Docker** (only for Container build agents)
+## How to deploy a change (the ONLY delivery path)
 
-### Development
-
-Run your agent locally:
+`assets/` is delivered to participants by syncing it to the Workshop Studio asset bucket —
+NOT by the normal git build. After editing files here:
 
 ```bash
-agentcore dev
+aws s3 sync ./assets s3://ws-assets-us-east-1/1bc2dbf0-7b79-4c9c-8ece-46a78c6a598f --delete
 ```
 
-### Deployment
+Then trigger a new build (push to `mainline`) and create a new event. The build must
+postdate the sync so the event snapshots the corrected assets.
 
-Deploy to AWS:
+## Sanity check on a provisioned box
 
-```bash
-agentcore deploy
-```
+`agentcore.json` should show `"harnesses": [{...}]` and empty `"runtimes": []`, and
+`~/PortfolioAdvisor/app/PortfolioAdvisor/` should contain `harness.json` (not `main.py`).
+If `~/HARNESS_SETUP_WARNING.txt` exists, the scaffold check failed — see `FACILITATOR_GUIDE.md`.
 
-## Commands
-
-| Command | Description |
-| --- | --- |
-| `agentcore create` | Create a new AgentCore project |
-| `agentcore add` | Add resources (agent, memory, credential, gateway, evaluator, policy) |
-| `agentcore remove` | Remove resources |
-| `agentcore dev` | Run agent locally with hot-reload |
-| `agentcore deploy` | Deploy to AWS via CDK |
-| `agentcore status` | Show deployment status |
-| `agentcore invoke` | Invoke agent (local or deployed) |
-| `agentcore logs` | View agent logs |
-| `agentcore traces` | View agent traces |
-| `agentcore eval` | Run evaluations |
-| `agentcore package` | Package agent artifacts |
-| `agentcore validate` | Validate configuration |
-| `agentcore pause` | Pause a deployed agent |
-| `agentcore resume` | Resume a paused agent |
-| `agentcore fetch` | Fetch remote resource definitions |
-| `agentcore import` | Import existing resources |
-| `agentcore update` | Check for CLI updates |
-
-## Configuration
-
-Edit the JSON files in `agentcore/` to configure your project. See `agentcore/.llm-context/` for type definitions and validation constraints.
-
-The project uses a **flat resource model** — agents, memories, credentials, gateways, evaluators, and policies are top-level arrays in `agentcore.json`. Resources are independent; agents discover memories and credentials at runtime via environment variables or SDK calls.
-
-## Resources
-
-| Resource | Purpose |
-| --- | --- |
-| Agent (runtime) | HTTP, MCP, or A2A agent deployed to AgentCore Runtime |
-| Memory | Persistent context storage with configurable strategies |
-| Credential | API key or OAuth credential providers |
-| Gateway | MCP gateway that routes tool calls to targets |
-| Gateway Target | Tool implementation (Lambda, MCP server, OpenAPI, Smithy, API Gateway) |
-| Evaluator | Custom LLM-as-a-Judge or code-based evaluation |
-| Online Eval Config | Continuous evaluation pipeline for deployed agents |
-| Policy | Cedar authorization policies for gateway tools |
-
-### Agent Types
-
-- **Template agents**: Created from framework templates (Strands, LangChain/LangGraph, GoogleADK, OpenAI Agents, Autogen)
-- **BYO agents**: Bring your own code with `agentcore add agent --type byo`
-- **Import agents**: Import existing Bedrock agents with `agentcore import`
-
-### Build Types
-
-- **CodeZip**: Python source packaged as a zip and deployed directly to AgentCore Runtime
-- **Container**: Docker image built via CodeBuild (ARM64), pushed to ECR, and deployed to AgentCore Runtime
-
-## Documentation
-
-- [AgentCore CLI](https://github.com/aws/agentcore-cli)
-- [AgentCore CDK Constructs](https://github.com/aws/agentcore-l3-cdk-constructs)
-- [Amazon Bedrock AgentCore](https://aws.amazon.com/bedrock/agentcore/)
+> History: there used to be a second, git-tracked copy at `static/workspace-bundle/`.
+> It was NOT the live seed (this `assets/` dir is) and was deleted to remove the
+> drift that once shipped a stale code agent. There is now one source of truth: here.

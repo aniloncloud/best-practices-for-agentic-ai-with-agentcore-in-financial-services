@@ -1228,6 +1228,25 @@ Resources:
                 Action:
                   - ssm:GetParameter
                 Resource: !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${PrefixCode}/config/AmazonCloudWatch-linux
+        # Pre-provision the AWS Agent Registry (Optional Lab: Enterprise Tool
+        # Registry) from the devbox setup script via the same `aws
+        # bedrock-agentcore-control` CLI the lab uses. The registry control/data
+        # actions all use the `bedrock-agentcore:` IAM prefix.
+        - PolicyName: !Sub ${PrefixCode}-iampolicy-codeserver-ToolRegistry
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock-agentcore:CreateRegistry
+                  - bedrock-agentcore:GetRegistry
+                  - bedrock-agentcore:ListRegistries
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - ssm:PutParameter
+                  - ssm:GetParameter
+                Resource: !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/app/portfolioadvisor/agentcore/tool_registry_id
         - !If
           - InstallKiroIDE
           - PolicyName: !Sub ${PrefixCode}-iampolicy-dcv-license
@@ -1562,6 +1581,45 @@ Resources:
           else
             echo "INFO: harness scaffold verified (harness.json present; agentcore.json registers a harness)"
           fi
+
+          # ------------------------------------------------------------------
+          # Pre-provision the AWS Agent Registry (Optional Lab: Enterprise Tool
+          # Registry) using the SAME `aws bedrock-agentcore-control` CLI the lab
+          # uses — so registry-API support is guaranteed (no Lambda boto3 risk).
+          # Idempotent (skips if the SSM param or a same-named registry exists)
+          # and non-blocking (runs in the background; on any failure the optional
+          # self-paced lab simply skips when the SSM param is absent). Backgrounded
+          # so it adds no time to boot / cfn-signal.
+          # ------------------------------------------------------------------
+          cat > /usr/local/bin/tool-registry-provision.sh <<'SCRIPT'
+          #!/bin/bash
+          REGION="$1"
+          PARAM=/app/portfolioadvisor/agentcore/tool_registry_id
+          NAME=PortfolioAdvisorToolRegistry
+          if aws ssm get-parameter --name "$PARAM" --region "$REGION" >/dev/null 2>&1; then
+            echo "tool registry SSM param already set; skipping"; exit 0
+          fi
+          RID=$(aws bedrock-agentcore-control list-registries --region "$REGION" \
+                --query "registries[?name=='$NAME']|[0].registryId" --output text 2>/dev/null)
+          if [ -z "$RID" ] || [ "$RID" = "None" ]; then
+            RID=$(aws bedrock-agentcore-control create-registry --name "$NAME" \
+                  --description "FSI tool & MCP server catalog for PortfolioAdvisor (auto-approval off)" \
+                  --region "$REGION" --query 'registryId' --output text 2>/dev/null)
+          fi
+          if [ -z "$RID" ] || [ "$RID" = "None" ]; then
+            echo "WARN: tool registry unavailable (API/permissions?); optional lab will be skipped"; exit 0
+          fi
+          ST=""
+          for i in $(seq 1 18); do
+            ST=$(aws bedrock-agentcore-control get-registry --registry-id "$RID" --region "$REGION" --query 'status' --output text 2>/dev/null)
+            [ "$ST" = "READY" ] && break
+            sleep 10
+          done
+          aws ssm put-parameter --name "$PARAM" --type String --value "$RID" --overwrite --region "$REGION" \
+            && echo "tool registry ready: $RID ($ST)"
+          SCRIPT
+          chmod +x /usr/local/bin/tool-registry-provision.sh
+          nohup /usr/local/bin/tool-registry-provision.sh "${AWS::Region}" > /var/log/tool-registry-provision.log 2>&1 &
 
           echo "INFO: Workshop setup completed at $(date)"
 

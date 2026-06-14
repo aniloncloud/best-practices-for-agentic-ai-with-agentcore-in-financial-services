@@ -86,9 +86,40 @@ aws bedrock-agentcore-control get-registry \
 
 You should see `status: READY` with IAM authorization. It was created with **auto-approval off**, which is what lets you walk the full governance workflow below.
 
-:::alert{header="What was pre-created" type="info"}
-Only an empty registry is pre-baked (one `create-registry` call, run for you — so you skip the ~1–2 min provisioning wait and don't need `CreateRegistry` permission). Everything below — publish, submit, review, approve, search — is yours to run. That's the governance workflow that's the point of this lab.
-:::
+::::expand{header="How this registry was created (reference — already done for you)"}
+The registry is pre-provisioned at account setup using the **same `aws bedrock-agentcore-control` CLI** you'll use below — so you skip the ~1–2 min provisioning wait. You don't run these; they're shown so the setup is transparent and reproducible in your own account.
+
+Create an IAM-authorized registry (auto-approval defaults to **off**, so records require curator approval):
+
+```bash
+aws bedrock-agentcore-control create-registry \
+  --name PortfolioAdvisorToolRegistry \
+  --description "FSI tool & MCP server catalog for PortfolioAdvisor (auto-approval off)" \
+  --region us-west-2
+# returns registryId / registryArn; status starts CREATING
+```
+
+Wait for it to become usable, then it's ready for records:
+
+```bash
+aws bedrock-agentcore-control get-registry --registry-id <registryId> --region us-west-2 \
+  --query '{name:name, status:status, autoApproval:autoApproval}'
+# status: CREATING -> READY
+```
+
+Other registry lifecycle operations (list, update auth/approval, delete) follow the same `bedrock-agentcore-control` verbs:
+
+```bash
+aws bedrock-agentcore-control list-registries --region us-west-2
+aws bedrock-agentcore-control update-registry --registry-id <registryId> \
+  --description '{"optionalValue": "Updated description"}' --region us-west-2
+aws bedrock-agentcore-control delete-registry --registry-id <registryId> --region us-west-2  # delete all records first
+```
+
+📖 Reference: [Create and manage registries](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/registry-create-manage.html) · [Managing registries](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/registry-managing-registries.html)
+
+Everything below — publish, submit, review, approve, search — is yours to run. That's the governance workflow that's the point of this lab.
+::::
 
 ## Step 2: Publish the Market Data MCP Server as a Record
 
