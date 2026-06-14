@@ -28,14 +28,24 @@ agentcore invoke ──────▶│                                     �
 
 ---
 
-## Step 1 — Start the deploy now
+## Step 1 — See the agent, then start the deploy
+
+Your agent is a single file. Look at it first, then kick off the deploy immediately — it takes 2–3 minutes, so start it and read Step 2 while it runs.
+
+:::code{language=bash}
+cd ~/PortfolioAdvisor
+cat app/PortfolioAdvisor/harness.json
+:::
+
+This one file *is* the agent: **`model`**, **`systemPrompt`** (which carries the stock & compliance reference data — that's the long string), and **`tools`** (empty for now — the Gateway adds entries in Lab 2). The harness runs the agent loop for you from this declarative config, so you start fast — and you keep full control: add your own tools and skills, set execution limits, or bring a custom container when you need deeper customization. Step 2 breaks down each field while the deploy runs.
+
+Now start the deploy:
 
 :::alert{header="Run this BEFORE reading further" type="warning"}
 The deploy takes 2–3 minutes. Start it now, then read Step 2 while it runs — that reading is the designated activity during the wait.
 :::
 
 :::code{language=bash}
-cd ~/PortfolioAdvisor
 agentcore validate
 agentcore deploy -y -v
 :::
@@ -90,13 +100,13 @@ Observability is already on. Every invoke emits an OpenTelemetry trace — model
 
 ---
 
-### Config tour: open `app/PortfolioAdvisor/harness.json`
+### Config tour: `app/PortfolioAdvisor/harness.json`
 
-This one file *is* the agent. Find these three things:
+This one file *is* the agent — you printed it in Step 1. Here's what each field does:
 
 **`model`** — `global.anthropic.claude-sonnet-4-6` on Amazon Bedrock. Changing the model is a one-line edit, or a per-invocation override (you'll do this in Step 4). No code, no rebuild.
 
-**`systemPrompt`** — defines the advisor's scope and tone, and carries a compact block of **stock and compliance reference data** directly in the prompt.
+**`systemPrompt`** — defines the advisor's scope and tone, and carries a compact block of **stock and compliance reference data** directly in the prompt (that's the long string you saw).
 
 :::alert{header="Why is the reference data in the prompt?" type="info"}
 A best practice: **if a tool would return the same static content on every call, put that content in the system prompt instead.** It's faster and cheaper than a tool round trip, and it lets Lab 1 work with zero external tools. The *dynamic* tools — portfolio risk and trade execution — come through the Gateway in Lab 2, because their results change per request and must be governed.
@@ -119,7 +129,7 @@ PortfolioAdvisor/
 └── ...
 ```
 
-There is no `main.py`, no orchestration loop, and no MCP client code to maintain. That code is what the managed harness runs for you.
+You don't have to write or maintain the orchestration loop — the managed harness runs it for you from this config. When a use case needs it, you can still drop down to custom code: add a custom container, your own tools, or agent skills. The harness is the fast default, not a ceiling.
 
 > **How this was scaffolded:** this project was created once with `agentcore create` followed by `agentcore add harness --name PortfolioAdvisor --model-id global.anthropic.claude-sonnet-4-6` (which generates `harness.json`); we added the system prompt and reference data. Your harness **execution role** is pre-provisioned in your account, so `agentcore deploy` just works. (You'll create the outbound credential provider for the Gateway yourself in Lab 2.)
 

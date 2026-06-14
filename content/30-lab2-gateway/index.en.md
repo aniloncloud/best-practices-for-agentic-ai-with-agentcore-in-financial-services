@@ -337,7 +337,7 @@ In Lab 3 you'll attach a Cedar policy engine to the Gateway and run this exact p
 
 ## What Just Happened?
 
-You created a Gateway with JWT authentication enabled from day one, registered two Lambda tools, registered an M2M credential provider, attached the Gateway to the harness with outbound M2M auth, configured inbound JWT on the harness, and deployed once. Critically, you wrote **no agent code** — the harness fetches and exchanges tokens for you. The token flow is:
+You created a Gateway with JWT authentication enabled from day one, registered two Lambda tools, registered an M2M credential provider, attached the Gateway to the harness with outbound M2M auth, configured inbound JWT on the harness, and deployed. Critically, you wrote **no agent code to add auth** — the harness fetches and exchanges tokens for you. Hardening here is configuration, not code; when a use case calls for it, the harness still lets you add your own tools, skills, or a custom container. The token flow is:
 
 ```
 End user → Cognito web client (authenticate) → JWT access token
