@@ -66,9 +66,6 @@ pip show strands-agents bedrock-agentcore
 # Verify AWS credentials (pre-configured via instance profile)
 aws sts get-caller-identity
 
-# Verify Docker
-docker --version
-
 # Verify region
 aws configure get region
 :::
@@ -77,8 +74,11 @@ Expected:
 - Python 3.11.x
 - `strands-agents` and `bedrock-agentcore` packages installed
 - Valid AWS identity (EC2 instance role)
-- Docker available
 - Region: `us-west-2`
+
+:::alert{header="Region Check" type="warning"}
+This workshop runs exclusively in **us-west-2**. If your region is different, run: `export AWS_DEFAULT_REGION=us-west-2`
+:::
 
 ### 4. Explore the Workshop Files
 

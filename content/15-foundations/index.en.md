@@ -4,9 +4,6 @@ weight: 15
 ---
 
 **⏱️ Reading time: ~10 minutes (no hands-on steps)**
-
-Read this while your facilitator introduces the session — or while your first deploy is running in Lab 1. The key points are also summarized in Lab 1's "While this deploys" panel, so you won't miss anything by starting the deploy first.
-
 ---
 
 ## From Demo to Production: The Gap
