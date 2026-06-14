@@ -1610,6 +1610,27 @@ Resources:
           fi
 
           # ------------------------------------------------------------------
+          # Upgrade AWS CLI v2 to the latest. AL2023 ships aws-cli ~2.33.x, which
+          # knows the `bedrock-agentcore-control` service but NOT the Agent
+          # Registry operations (create-registry/get-registry/list-registries/
+          # *-record) used by the optional Tool Registry lab AND its
+          # pre-provisioning step below. Without this, those calls fail with
+          # "invalid choice 'create-registry'". The official installer drops the
+          # new CLI at /usr/local/bin/aws (ahead of /usr/bin/aws on PATH) for both
+          # root here and the ec2-user lab terminal. NON-FATAL.
+          # ------------------------------------------------------------------
+          dnf install -y unzip >/dev/null 2>&1 || true
+          if curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip; then
+            (cd /tmp && unzip -q -o awscliv2.zip && (./aws/install --update || ./aws/install)) \
+              && hash -r \
+              && echo "INFO: aws cli upgraded: $(/usr/local/bin/aws --version 2>&1)" \
+              || echo "WARN: aws cli upgrade failed; Agent Registry API ops may be unavailable"
+            rm -rf /tmp/awscliv2.zip /tmp/aws
+          else
+            echo "WARN: could not download aws cli installer; Agent Registry API ops may be unavailable"
+          fi
+
+          # ------------------------------------------------------------------
           # Pre-provision the AWS Agent Registry (Optional Lab: Enterprise Tool
           # Registry) using the SAME `aws bedrock-agentcore-control` CLI the lab
           # uses — so registry-API support is guaranteed (no Lambda boto3 risk).
