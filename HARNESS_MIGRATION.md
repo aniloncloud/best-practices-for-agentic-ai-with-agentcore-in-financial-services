@@ -224,13 +224,18 @@ as reference one-liners.
   Public, logs, X-Ray, CW metrics). ARN → SSM `harness_execution_role_arn`. The devbox
   patches `app/PortfolioAdvisor/harness.json` at provision time to set
   `executionRoleArn` to this role, so every harness deploy uses one stable, audited,
-  least-privilege role. The managed-harness CDK imports an externally-supplied
+  least-privilege role. The patch is unconditional (the role name is deterministic
+  and is guaranteed to exist by `agentcore deploy` time, since Workshop Studio only
+  grants box access after all stacks reach CREATE_COMPLETE) — an earlier
+  provision-time `get-role` guard was removed because prereqs/devbox deploy in
+  parallel and the role often did not exist yet when the devbox ran, leaving boxes
+  on the CDK-generated role. The managed-harness CDK imports an externally-supplied
   `executionRoleArn` as-is (`Role.fromRoleArn`, `mutable:false`) and attaches **no**
   scoped policies to it — so this role must (and does) carry the complete permission set,
   including the X-Ray/logs/CW-metrics perms that make CloudWatch GenAI Observability work
-  from the first invoke. If the role is somehow absent, the devbox skips the patch and the
-  CDK falls back to generating its own role (which also includes observability perms), so
-  Labs 1–3 still work either way. OTEL needs no enabling: the managed harness
+  from the first invoke. If the role is somehow absent at deploy time, CreateHarness
+  fails role validation (with retry) rather than silently using a different role.
+  OTEL needs no enabling: the managed harness
   auto-instruments every invocation with OpenTelemetry — there is no harness-level OTEL
   knob in the CLI/schema (only code-agent *runtimes* expose `instrumentation.enableOtel`).
 - **`GatewayServiceRole`** (`workshop-gateway-service-role`) — `lambda:InvokeFunction` on

@@ -1597,8 +1597,17 @@ Resources:
           # the patch and the CDK falls back to generating its own role (which also
           # carries the observability perms). NON-FATAL.
           # ------------------------------------------------------------------
+          # The role name is deterministic and the role is created by the prereqs
+          # stack. We patch harness.json UNCONDITIONALLY rather than gating on a
+          # provision-time `aws iam get-role` check: the prereqs and devbox stacks
+          # deploy in parallel, so the role often does not exist yet when this
+          # UserData runs — that race left earlier boxes on the CDK-generated role
+          # ("pre-provisioned harness role not found"). The role IS guaranteed to
+          # exist by the time a participant runs `agentcore deploy` (Workshop
+          # Studio only grants box access after ALL stacks reach CREATE_COMPLETE),
+          # which is when the ARN is actually validated by CreateHarness. NON-FATAL.
           HARNESS_ROLE_ARN="arn:aws:iam::${AWS::AccountId}:role/workshop-harness-execution-role"
-          if [ -f "$HARNESS_JSON" ] && aws iam get-role --role-name workshop-harness-execution-role >/dev/null 2>&1; then
+          if [ -f "$HARNESS_JSON" ]; then
             if HJ="$HARNESS_JSON" RA="$HARNESS_ROLE_ARN" python3 -c "import json,os; p=os.environ['HJ']; d=json.load(open(p)); d['executionRoleArn']=os.environ['RA']; json.dump(d, open(p,'w'), indent=2)"; then
               chown ec2-user:ec2-user "$HARNESS_JSON" 2>/dev/null || true
               echo "INFO: harness.json wired to pre-provisioned execution role $HARNESS_ROLE_ARN"
@@ -1606,7 +1615,7 @@ Resources:
               echo "WARN: failed to patch harness.json executionRoleArn; CDK will generate its own role"
             fi
           else
-            echo "INFO: pre-provisioned harness role not found or harness.json missing; CDK generates its own execution role (observability perms still included)"
+            echo "INFO: harness.json missing; CDK generates its own execution role (observability perms still included)"
           fi
 
           # ------------------------------------------------------------------
