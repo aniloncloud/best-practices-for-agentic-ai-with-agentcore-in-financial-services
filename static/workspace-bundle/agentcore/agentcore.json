@@ -10,8 +10,7 @@
   "harnesses": [
     {
       "name": "PortfolioAdvisor",
-      "configLocation": "app/PortfolioAdvisor/harness.json",
-      "networkMode": "PUBLIC"
+      "path": "app/PortfolioAdvisor"
     }
   ],
   "memories": [],
