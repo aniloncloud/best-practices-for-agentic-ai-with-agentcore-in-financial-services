@@ -96,26 +96,25 @@ agentcore validate
 agentcore deploy -y -v
 :::
 
-## Step 2: Reduce Evaluation Sampling Rate
+## Step 2: Tune Evaluation Sampling Rate
 
-In the Evaluations lab you configured 100% evaluation sampling — useful for testing, expensive in production. Reduce it to 20%.
+Continuous **online evaluation** (the production pattern from the Evaluations lab) samples a percentage of live sessions. 100% is great for testing but expensive at scale — in production, lower the rate.
 
-:::code{language=bash}
-# Remove the existing evaluation config (cannot re-add with the same name)
-agentcore remove online-eval --name QualityMonitor -y
+Sampling is controlled by `samplingPercentage` in the online-eval config's rule. To change it, recreate the config with the new rate. For example, 20% sampling:
 
-# Re-add with 20% sampling
-agentcore add online-eval \
-  --name QualityMonitor \
-  --runtime PortfolioAdvisor \
-  --evaluator Builtin.GoalSuccessRate Builtin.Correctness Builtin.ToolSelectionAccuracy \
-  --sampling-rate 20 \
+:::code{language=bash showCopyAction=false}
+# Reference — online evaluation requires an evaluation execution role ($EVAL_ROLE_ARN)
+# and the $DATA_SOURCE you built in the Evaluations lab (Step 2). See that lab's Step 6.
+aws bedrock-agentcore-control create-online-evaluation-config \
+  --online-evaluation-config-name "PortfolioAdvisorQualityMonitor" \
+  --rule '{"samplingConfig":{"samplingPercentage":20.0}}' \
+  --data-source-config "$DATA_SOURCE" \
+  --evaluators '[{"evaluatorId":"Builtin.GoalSuccessRate"},{"evaluatorId":"Builtin.Correctness"},{"evaluatorId":"Builtin.ToolSelectionAccuracy"}]' \
+  --evaluation-execution-role-arn "$EVAL_ROLE_ARN" \
   --enable-on-create
-
-agentcore deploy -y -v
 :::
 
-> **Cost impact:** Reducing sampling from 100% to 20% cuts evaluation costs by 80% while maintaining statistical significance. For 1,000+ daily interactions, 20% gives you 200+ evaluated samples per day — more than enough for reliable quality signals.
+> **Cost impact:** Reducing sampling from 100% to 20% cuts evaluation costs by 80% while maintaining statistical significance. For 1,000+ daily interactions, 20% gives you 200+ evaluated samples per day — more than enough for reliable quality signals. (On-demand **batch** evaluation, used in the Evaluations lab, only costs when you run it — another way to control eval spend.)
 
 ### Sampling Rate Guidelines
 

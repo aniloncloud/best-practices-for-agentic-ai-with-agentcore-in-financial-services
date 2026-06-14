@@ -292,9 +292,10 @@ Afterward `agentcore/agentcore.json` should show a `"harnesses"` entry (not `"ru
 - If `agentcore validate` fails after adding `authorizerConfiguration`, check for JSON syntax errors — missing commas between fields are common.
 
 **Self-Paced: Evaluations (`60-lab5-evaluations`):**
-- If traces don't appear in CloudWatch, confirm the agent was deployed (not just running locally). Evaluations are only active for cloud-deployed runtimes.
-- Evaluation results take a few minutes to appear after traffic is generated. Generate test traffic at the start of the lab and check the dashboard toward the end.
-- If adding a second `QualityMonitor` fails with a duplicate name error, the previous configuration must be paused first: `agentcore pause online-eval QualityMonitor`.
+- This lab uses the **`aws bedrock-agentcore` CLI** (not `agentcore`) for evaluations: the `agentcore` eval subcommands bind to a code-agent `runtime` in `agentcore.json`, which a harness project doesn't have. The lab drives an on-demand **batch evaluation** against the harness's CloudWatch traces instead.
+- If traces don't appear in CloudWatch, confirm the agent was deployed and invoked (traces lag 1–2 min). The batch job discovers sessions from the harness runtime log group, so generate the test interactions in Step 3 and wait before starting the job in Step 4.
+- Batch evaluation needs no execution role. **Online** (continuous) evaluation — shown as a reference pattern in Step 6 — does require an evaluation execution role (`--evaluation-execution-role-arn`), which is not pre-provisioned; treat that block as read-only unless you create such a role.
+- `start-batch-evaluation` requires the box's upgraded AWS CLI (the devbox upgrades it at provision time). Verify with `aws --version` (needs ≥ 2.35).
 
 **Self-Paced: VPC Networking (`70-lab6-vpc`):**
 - The `networkMode` and `vpcConfig` fields must be edited directly in agentcore.json. There is no `--network-mode` CLI flag. This is explicitly documented in the lab.
@@ -309,7 +310,7 @@ Afterward `agentcore/agentcore.json` should show a `"harnesses"` entry (not `"ru
 
 **Self-Paced: Cost Optimization (`88-optional-cost`):**
 - The `sessionConfig` block is a direct agentcore.json edit — no CLI flag exists for session lifecycle parameters.
-- When re-adding `QualityMonitor` with 20% sampling, the old configuration must be paused first.
+- The evaluation-sampling section (Step 2) is a **reference** block: changing the online-eval `samplingPercentage` uses `aws bedrock-agentcore-control create-online-evaluation-config`, which requires an evaluation execution role. It's not hands-on unless such a role exists. On-demand batch evaluation (Evaluations lab) is the no-setup way to control eval spend.
 
 ### Service Limits During Delivery
 

@@ -15,13 +15,13 @@ Do this after the live session — **your event account stays available for a li
 
 Your portfolio advisor agent is deployed with Gateway tools and Cedar-enforced authorization policies. But how do you know if it's performing well? Are clients getting accurate investment analysis? Is the agent selecting the right tools?
 
-In this lab, you'll set up continuous quality monitoring using AgentCore Evaluations — automated assessment of every agent interaction using built-in LLM-as-a-Judge evaluators.
+In this lab, you'll score your agent's real interactions using AgentCore Evaluations — automated assessment with built-in LLM-as-a-Judge evaluators that read the traces your harness already emits to CloudWatch.
 
 ### What You'll Learn
 
-- Configure and deploy online evaluation with built-in evaluators
-- Generate test interactions and run on-demand evaluations
-- View results via CLI and CloudWatch
+- Run an on-demand **batch evaluation** over your agent's recorded sessions
+- View per-evaluator scores via the CLI and CloudWatch
+- Set up **continuous online evaluation** for production (reference pattern)
 
 ### Built-in Evaluators
 
@@ -31,22 +31,25 @@ In this lab, you'll set up continuous quality monitoring using AgentCore Evaluat
 | **Builtin.Correctness** | Factual accuracy of responses |
 | **Builtin.ToolSelectionAccuracy** | Whether the agent picks the right tools |
 
-### How Online Evaluation Works
+### How Evaluation Works
 
-1. **Sampling** — A configurable percentage of sessions are selected for evaluation
-2. **Evaluation** — Built-in evaluators assess each sampled session using LLM-as-a-Judge
-3. **Monitoring** — Results flow into CloudWatch GenAI Observability dashboards automatically
+AgentCore Evaluations reads the OpenTelemetry traces your harness writes to CloudWatch Logs (the same traces you saw in the Observability lab) and scores sessions with LLM-as-a-Judge — **no instrumentation code and no agent changes**.
+
+- **Batch (on-demand)** — score a set of already-recorded sessions in one job. Great for "evaluate the last day of traffic after a prompt change." *(This lab.)*
+- **Online (continuous)** — sample live traffic continuously and stream scores to dashboards. *(Production pattern shown at the end.)*
+
+Both read from the same data source: your harness runtime's CloudWatch log group and OTEL `service.name`.
 
 ### What You're Building
 
 :::code{language=bash showCopyAction=false}
-agentcore invoke ──▶ AgentCore Runtime ──▶ Gateway ──▶ Lambda
+agentcore invoke ──▶ AgentCore Harness ──▶ Gateway ──▶ Lambda
                          │
-                         ▼
+                         ▼  (OTEL traces → CloudWatch Logs)
               ┌─────────────────────────────────────┐
               │   AgentCore Evaluations             │ ← THIS LAB
               │                                     │
-              │   Sampled sessions evaluated by:    │
+              │   Batch job scores sessions with:   │
               │   ├── GoalSuccessRate               │
               │   ├── Correctness                   │
               │   └── ToolSelectionAccuracy          │
@@ -55,10 +58,14 @@ agentcore invoke ──▶ AgentCore Runtime ──▶ Gateway ──▶ Lambda
               └─────────────────────────────────────┘
 :::
 
+:::alert{header="Why the AWS CLI here (not agentcore)" type="info"}
+The `agentcore` CLI's eval commands target a code-agent **runtime** entry in `agentcore.json`. This workshop uses the declarative **harness**, so we drive evaluations with the `aws bedrock-agentcore` CLI directly against the harness's CloudWatch traces — the same API the SDK uses.
+:::
+
 ## Step 1: Refresh Your Token (if needed)
 
 :::alert{header="JWT Token Required" type="warning"}
-All invocations require a valid Cognito JWT (`$TOKEN`). If your token has expired or you're in a new terminal, source your environment and re-run the token retrieval commands from Lab 2 before continuing.
+All invocations require a valid Cognito JWT (`$TOKEN`). If your token has expired or you're in a new terminal, source your environment and re-run the token retrieval.
 :::
 
 :::code{language=bash}
@@ -71,51 +78,25 @@ TOKEN=$(aws cognito-idp initiate-auth \
   --query 'AuthenticationResult.AccessToken' --output text)
 :::
 
-## Step 2: Configure Online Evaluation
+## Step 2: Identify Your Deployed Harness
 
-Add an online evaluation configuration that monitors your PortfolioAdvisor agent with all three built-in evaluators:
-
-:::code{language=bash}
-agentcore add online-eval \
-  --name QualityMonitor \
-  --runtime PortfolioAdvisor \
-  --evaluator Builtin.GoalSuccessRate Builtin.Correctness Builtin.ToolSelectionAccuracy \
-  --sampling-rate 100 \
-  --enable-on-create
-:::
-
-You should see:
-:::code{language=bash showCopyAction=false}
-Added online eval 'QualityMonitor'
-:::
-
-:::alert{header="Sampling Rate" type="info"}
-We use `--sampling-rate 100` (100%) for this workshop so every interaction is evaluated. In production, use 10-20% to balance cost and coverage. The `--enable-on-create` flag activates evaluation immediately after the next deployment.
-:::
-
-## Step 3: Deploy
-
-Deploy the evaluation configuration alongside your existing runtime resources:
+Evaluations read traces from your harness's CloudWatch log group. Capture the runtime ID, log group, and OTEL service name once — the later commands reuse them:
 
 :::code{language=bash}
-agentcore deploy -y -v
+HARNESS_RUNTIME_ID=$(aws bedrock-agentcore-control list-agent-runtimes --region us-west-2 \
+  --query "agentRuntimes[?starts_with(agentRuntimeName, 'harness_PortfolioAdvisor')].agentRuntimeId | [0]" --output text)
+
+LOG_GROUP="/aws/bedrock-agentcore/runtimes/${HARNESS_RUNTIME_ID}-DEFAULT"
+SERVICE_NAME="harness_PortfolioAdvisor_PortfolioAdvisor.DEFAULT"
+
+echo "Runtime:  $HARNESS_RUNTIME_ID"
+echo "LogGroup: $LOG_GROUP"
+echo "Service:  $SERVICE_NAME"
 :::
 
-After deployment, verify the evaluation is active:
+## Step 3: Generate Test Interactions
 
-:::code{language=bash}
-agentcore status
-:::
-
-If the status shows `DISABLED`, enable it with:
-
-:::code{language=bash}
-agentcore resume online-eval QualityMonitor
-:::
-
-## Step 4: Generate Test Interactions
-
-Send five varied queries to give the evaluators representative data to assess:
+Send five varied queries so the evaluators have representative sessions to score:
 
 :::code{language=bash}
 SESSION_EVAL=$(python3 -c 'import uuid; print(uuid.uuid4())')
@@ -141,37 +122,59 @@ agentcore invoke "What kind of investment analysis can you provide? List your ca
   --session-id $SESSION_EVAL --bearer-token "$TOKEN" --stream
 :::
 
-:::alert{header="Processing Delay" type="info"}
-Evaluation results take a few minutes to process after interactions are generated. Continue to the next step, then return to view results.
+:::alert{header="Let traces land first" type="info"}
+Traces take 1–2 minutes to appear in CloudWatch. Wait a couple of minutes before starting the evaluation so the job can discover these sessions.
 :::
 
-## Step 5: Run On-Demand Evaluation
+## Step 4: Run an On-Demand (Batch) Evaluation
 
-In addition to continuous online evaluation, you can evaluate historical traces on demand:
+Start a batch evaluation. The service discovers your sessions from the log group and scores each one with the three built-in evaluators:
 
 :::code{language=bash}
-agentcore run eval \
-  --runtime PortfolioAdvisor \
-  --evaluator Builtin.GoalSuccessRate Builtin.Correctness \
-  --days 1
+DATA_SOURCE="{\"cloudWatchLogs\":{\"serviceNames\":[\"$SERVICE_NAME\"],\"logGroupNames\":[\"$LOG_GROUP\"]}}"
+
+BATCH_ID=$(aws bedrock-agentcore start-batch-evaluation \
+  --batch-evaluation-name "portfolio_eval_$(date +%s)" \
+  --evaluators '[{"evaluatorId":"Builtin.GoalSuccessRate"},{"evaluatorId":"Builtin.Correctness"},{"evaluatorId":"Builtin.ToolSelectionAccuracy"}]' \
+  --data-source-config "$DATA_SOURCE" \
+  --client-token "$(python3 -c 'import uuid; print(uuid.uuid4())')" \
+  --region us-west-2 \
+  --query 'batchEvaluationId' --output text)
+
+echo "Started batch evaluation: $BATCH_ID"
 :::
 
-This evaluates all traces from the last day using the specified evaluators — useful for retroactive analysis after a system prompt change.
+:::alert{header="No extra IAM setup" type="info"}
+Batch evaluation runs as a managed job — no execution role argument is required. The workshop environment already has the permissions it needs.
+:::
 
-## Step 6: View Results
+Poll until the job finishes (`COMPLETED`):
+
+:::code{language=bash}
+aws bedrock-agentcore get-batch-evaluation \
+  --batch-evaluation-id "$BATCH_ID" --region us-west-2 \
+  --query '{status:status,evaluators:evaluators[].evaluatorId}'
+:::
+
+Re-run that command until `status` is `COMPLETED` (usually ~1 minute). `PENDING`/`IN_PROGRESS` means it's still running.
+
+## Step 5: View Results
 
 ### Via CLI
 
-View past evaluation run results:
+List recent batch evaluations and their status:
 
 :::code{language=bash}
-agentcore evals history --runtime PortfolioAdvisor --limit 5
+aws bedrock-agentcore list-batch-evaluations --region us-west-2 \
+  --query 'batchEvaluations[].{name:batchEvaluationName,status:status,id:batchEvaluationId}' \
+  --output table
 :::
 
-View streaming evaluation logs:
+Detailed per-session scores are written to a CloudWatch log group. Tail it to see the raw evaluation records:
 
 :::code{language=bash}
-agentcore logs evals --runtime PortfolioAdvisor --since 30m
+aws logs tail "/aws/bedrock-agentcore/evaluations/batch-evaluations/results/default" \
+  --since 30m --region us-west-2
 :::
 
 ### Via CloudWatch Console
@@ -194,6 +197,32 @@ agentcore logs evals --runtime PortfolioAdvisor --since 30m
 - **Low Correctness** → Update market data; improve response formatting
 - **Low Tool Selection Accuracy** → Improve tool descriptions; add examples to the system prompt
 
+## Step 6: Continuous Evaluation in Production (reference)
+
+Batch evaluation is on-demand. In production you'd run **online evaluation** to continuously sample live traffic and stream scores to dashboards. It uses the same CloudWatch data source, plus an IAM **evaluation execution role** (the role the managed job assumes to read your logs and call the judge model):
+
+:::code{language=bash showCopyAction=false}
+# Reference — requires an evaluation execution role ARN ($EVAL_ROLE_ARN)
+aws bedrock-agentcore-control create-online-evaluation-config \
+  --online-evaluation-config-name "PortfolioAdvisorQualityMonitor" \
+  --rule '{"samplingConfig":{"samplingPercentage":100.0}}' \
+  --data-source-config "$DATA_SOURCE" \
+  --evaluators '[{"evaluatorId":"Builtin.GoalSuccessRate"},{"evaluatorId":"Builtin.Correctness"},{"evaluatorId":"Builtin.ToolSelectionAccuracy"}]' \
+  --evaluation-execution-role-arn "$EVAL_ROLE_ARN" \
+  --enable-on-create
+:::
+
+Pause or resume a running config at any time:
+
+:::code{language=bash showCopyAction=false}
+agentcore pause online-eval PortfolioAdvisorQualityMonitor
+agentcore resume online-eval PortfolioAdvisorQualityMonitor
+:::
+
+:::alert{header="Sampling rate" type="info"}
+Use `samplingPercentage: 100` so every interaction is evaluated in a demo. In production, 10–20% balances cost and coverage for high-volume informational queries; reserve 100% for critical flows (regulated advice, trade execution).
+:::
+
 ## Architecture
 
 :::code{language=bash showCopyAction=false}
@@ -201,27 +230,29 @@ Client (with JWT token)
     ↓
 Cognito validates token
     ↓
-AgentCore Runtime (PortfolioAdvisor)
+AgentCore Harness (PortfolioAdvisor)
     ├── Cedar policy enforcement (Lab 3)
     ├── Model + system prompt (stock/compliance reference data)
     └── Gateway tool (by reference) → AgentCore Gateway → Lambda: check_portfolio_risk
                           ↓
                     CloudWatch (traces, logs, metrics)
                           ↓
-                    AgentCore Evaluations (QualityMonitor)
-                      ├── Builtin.GoalSuccessRate
-                      ├── Builtin.Correctness
-                      └── Builtin.ToolSelectionAccuracy
+                    AgentCore Evaluations
+                      ├── Batch (on-demand) — this lab
+                      └── Online (continuous) — production
+                            ├── Builtin.GoalSuccessRate
+                            ├── Builtin.Correctness
+                            └── Builtin.ToolSelectionAccuracy
 :::
 
 ## What Just Happened?
 
-Two commands added continuous quality monitoring to your production agent:
+You scored your agent's real sessions without changing the agent:
 
-1. `agentcore add online-eval` — Configure evaluators and sampling rate
-2. `agentcore deploy` — Deploy alongside your existing runtime
+1. `aws bedrock-agentcore start-batch-evaluation` — score recorded sessions from CloudWatch traces with LLM-as-a-Judge
+2. `get-batch-evaluation` / `list-batch-evaluations` — track status and results
 
-The evaluators now automatically sample sessions, score them with LLM-as-a-Judge, and store results in CloudWatch — no additional instrumentation code required.
+The harness already emits the traces; evaluations read them. No instrumentation code, no runtime changes.
 
 ---
 
@@ -233,7 +264,7 @@ The evaluators now automatically sample sessions, score them with LLM-as-a-Judge
 
 **Sampling strategies — cost vs. coverage.** Use 100% sampling for critical flows (regulated advice, trade execution) and 10-20% for high-volume informational queries. Review CloudWatch cost metrics after the first week and adjust.
 
-**Evaluation-driven development.** Baseline scores measured before launch become acceptance criteria. If a system prompt change drops Goal Success Rate by more than 5 points, reject it. Run `agentcore run eval --days 7` before merging any agent configuration change and treat a score regression the same way you'd treat a failing unit test.
+**Evaluation-driven development.** Baseline scores measured before launch become acceptance criteria. If a system prompt change drops Goal Success Rate by more than 5 points, reject it. Run a batch evaluation over the last week of traffic before merging any agent configuration change and treat a score regression the same way you'd treat a failing unit test.
 
 **Acting on low scores.** A low score is a signal, not a verdict. Low Goal Success Rate usually points to an unclear system prompt or missing tool coverage. Low Tool Selection Accuracy often means tool descriptions are ambiguous — improve the descriptions before anything else.
 
