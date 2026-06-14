@@ -41,10 +41,13 @@ agentcore invoke ──▶ AgentCore Runtime (PortfolioAdvisor)
 
 ## Step 1: Inspect a Trace
 
-Every `agentcore invoke` produces a trace in CloudWatch. Let's look at the full flow of one invocation:
+Every `agentcore invoke` produces a trace in CloudWatch. The managed harness streams its runtime logs to a CloudWatch log group. (`agentcore logs` targets code-agent *runtimes* only — this project is a harness, so we read the harness log group directly.) Capture the harness runtime ID once, then tail its logs:
 
 :::code{language=bash}
-agentcore logs --runtime PortfolioAdvisor --since 15m
+HARNESS_RUNTIME_ID=$(aws bedrock-agentcore-control list-agent-runtimes --region us-west-2 \
+  --query "agentRuntimes[?starts_with(agentRuntimeName, 'harness_PortfolioAdvisor')].agentRuntimeId | [0]" --output text)
+
+aws logs tail "/aws/bedrock-agentcore/runtimes/${HARNESS_RUNTIME_ID}-DEFAULT" --since 15m --region us-west-2
 :::
 
 Each trace captures:
@@ -145,8 +148,10 @@ The agent selected both tools because the query asked about both risk and compli
 ### View the trace detail:
 
 :::code{language=bash}
-agentcore logs --runtime PortfolioAdvisor --since 5m
+aws logs tail "/aws/bedrock-agentcore/runtimes/${HARNESS_RUNTIME_ID}-DEFAULT" --since 5m --region us-west-2
 :::
+
+(`HARNESS_RUNTIME_ID` was set in Step 1. If your shell was reset, re-run the `list-agent-runtimes` line from Step 1 to repopulate it.)
 
 Look for:
 - **Tool selection reasoning** — The model's internal decision about which tools to call
@@ -180,7 +185,7 @@ Before moving on, confirm you can access all three observability surfaces:
 
 | Surface | How to Access | What It Shows |
 |---------|---------------|---------------|
-| **CLI logs** | `agentcore logs --runtime PortfolioAdvisor --since 15m` | Recent invocation logs, errors, warnings |
+| **CLI logs** | `aws logs tail "/aws/bedrock-agentcore/runtimes/${HARNESS_RUNTIME_ID}-DEFAULT" --since 15m` | Recent invocation logs, errors, warnings |
 | **CloudWatch traces** | Console → GenAI Observability → PortfolioAdvisor | Span waterfall, latency breakdown, tool calls |
 | **CloudWatch metrics** | Console → GenAI Observability → PortfolioAdvisor → Metrics | Token usage, invocation count, error rate |
 
