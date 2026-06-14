@@ -29,7 +29,7 @@ async function main() {
   const targets = await configIO.readAWSDeploymentTargets();
 
   // The vended CDK project compiles against the published @aws/agentcore-cdk
-  // schema type, which may lag the CLI's own AgentCoreProjectSpec (e.g. payments,
+  // schema type, which may lag the CLI's own AgentCoreProjectSpec (e.g.
   // harnesses, gateway fields). Cast once so those fields are reachable.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const specAny = spec as any;
@@ -113,51 +113,11 @@ async function main() {
       | Record<string, { credentialProviderArn: string; clientSecretArn?: string }>
       | undefined;
 
-    // Payment credential provider ARNs live in the same credentials map as identity credentials
-    const paymentCredentials = credentials;
-
-    const paymentSpec = specAny.payments?.length
-      ? specAny.payments.map(
-          (p: {
-            name: string;
-            description?: string;
-            authorizerType: 'AWS_IAM' | 'CUSTOM_JWT';
-            authorizerConfiguration?: unknown;
-            autoPayment?: boolean;
-            paymentToolAllowlist?: string[];
-            networkPreferences?: string[];
-            connectors: { name: string; provider?: string; credentialName: string }[];
-          }) => ({
-            name: p.name,
-            description: p.description,
-            authorizerType: p.authorizerType,
-            authorizerConfiguration: p.authorizerConfiguration,
-            autoPayment: p.autoPayment,
-            paymentToolAllowlist: p.paymentToolAllowlist,
-            networkPreferences: p.networkPreferences,
-            connectors: p.connectors.map(c => {
-              const credentialProviderArn = paymentCredentials?.[c.credentialName]?.credentialProviderArn;
-              if (!credentialProviderArn) {
-                // Fail fast with an actionable message rather than passing an empty
-                // ARN that fails opaquely server-side at CreatePaymentConnector.
-                throw new Error(
-                  `Payment connector "${c.name}" on manager "${p.name}" references credential ` +
-                    `"${c.credentialName}", but no deployed credential provider was found for it. ` +
-                    `Run \`agentcore deploy\` so the credential provider is created first.`
-                );
-              }
-              return { name: c.name, provider: c.provider, credentialProviderArn };
-            }),
-          })
-        )
-      : undefined;
-
     new AgentCoreStack(app, stackName, {
       spec,
       mcpSpec,
       credentials,
       harnesses: harnessConfigs.length > 0 ? harnessConfigs : undefined,
-      paymentSpec,
       env,
       description: `AgentCore stack for ${spec.name} deployed to ${target.name} (${target.region})`,
       tags: {
