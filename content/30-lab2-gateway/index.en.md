@@ -9,7 +9,7 @@ weight: 30
 
 Your harness answers from its system prompt today, but real-world agents need access to existing business logic — Lambda functions, REST APIs, databases. Rather than embedding those connections in agent code, AgentCore Gateway provides a centralized, governed control plane for tool access, and you attach it to the harness **by reference**.
 
-In this lab you'll do three things in one deploy:
+In this lab you'll wire up tools and secure both layers, across two deploys (the Gateway must exist before the harness can reference it):
 
 1. Create a Gateway **with JWT authentication from the start** — no unauthenticated window
 2. Register two Lambda tools (portfolio risk check and trade execution) and attach the Gateway to the harness
@@ -73,7 +73,6 @@ Run `source ~/portfolio-env.sh` again. Labs 2 and 3 both rely on these variables
 
 ```bash
 agentcore add gateway --name my-gateway \
-  --role-arn $GATEWAY_ROLE_ARN \
   --authorizer-type CUSTOM_JWT \
   --discovery-url $COGNITO_DISCOVERY_URL \
   --allowed-clients $COGNITO_CLIENT_ID \
@@ -86,7 +85,7 @@ You should see:
 Added gateway 'my-gateway'
 :::
 
-`--role-arn` is the **pre-provisioned** gateway service role — it already has permission to invoke the Lambda targets *and* to call the policy engine you attach in Lab 3, so the governance step works without any manual IAM fix. `--discovery-url` tells the Gateway where to fetch Cognito's signing keys. The Gateway is reached by the **harness using a machine-to-machine (M2M) token**, so `--allowed-clients` is the M2M app client and `--allowed-scopes` is the gateway scope.
+`agentcore deploy` provisions the Gateway's service role for you (with permission to invoke the Lambda targets and to call the policy engine you attach in Lab 3), so the governance step works without any manual IAM fix. `--discovery-url` tells the Gateway where to fetch Cognito's signing keys. The Gateway is reached by the **harness using a machine-to-machine (M2M) token**, so `--allowed-clients` is the M2M app client and `--allowed-scopes` is the gateway scope.
 
 In production you would never create a gateway unauthenticated even temporarily. We don't here either.
 
@@ -117,6 +116,14 @@ agentcore add gateway-target \
 ```
 
 The Lambda functions themselves are unchanged — the Gateway MCPifies them, making existing business logic discoverable by any agent.
+
+Now deploy the Gateway so it exists in AWS — the next step attaches it to the harness **by ARN**, which requires the Gateway to be deployed first:
+
+```bash
+agentcore deploy -y -v
+```
+
+This first deploy (~2–3 min) creates the Gateway and its two Lambda targets. (You'll deploy once more at Step 7 after wiring the harness.)
 
 ---
 
@@ -162,8 +169,9 @@ agentcore add tool --harness PortfolioAdvisor \
   --name my-gateway \
   --gateway my-gateway \
   --outbound-auth oauth \
-  --credential-arn $GATEWAY_M2M_CRED_ARN \
-  --scopes $COGNITO_SCOPE
+  --provider-arn $GATEWAY_M2M_CRED_ARN \
+  --scopes $COGNITO_SCOPE \
+  --grant-type CLIENT_CREDENTIALS
 ```
 
 Confirm it landed in `harness.json`:
@@ -185,8 +193,9 @@ python3 - <<'EOF'
 import json, os
 p = "app/PortfolioAdvisor/harness.json"
 cfg = json.load(open(p))
+cfg["authorizerType"] = "CUSTOM_JWT"
 cfg["authorizerConfiguration"] = {
-    "customJWTAuthorizer": {
+    "customJwtAuthorizer": {
         "discoveryUrl": os.environ["COGNITO_DISCOVERY_URL"],
         "allowedClients": [os.environ["COGNITO_WEB_CLIENT_ID"]],
     }
@@ -218,7 +227,7 @@ agentcore validate
 agentcore deploy -y -v
 ```
 
-This is your **second deploy** (first was Lab 1) and the last one until Lab 3. While it runs (~2–3 min), work through Step 8.
+This is the **second deploy in this lab** (the first created the Gateway in Step 3) and the last one until Lab 3. While it runs (~2–3 min), work through Step 8.
 
 ---
 
@@ -304,7 +313,7 @@ agentcore invoke --harness PortfolioAdvisor "Check the portfolio risk for PORT-0
   --session-id $SESSION_ID
 ```
 
-You'll see a `401 Unauthorized` response. The harness rejected the request before it reached the agent loop — no unauthenticated call ever touches the Lambda. Both the harness and Gateway now reject anonymous callers independently.
+You'll see the request rejected — the CLI reports the harness is configured for `CUSTOM_JWT` but no bearer token was provided, so the call is refused before it ever reaches the agent loop. No unauthenticated call touches the Lambda. Both the harness and Gateway reject anonymous callers independently.
 
 ---
 

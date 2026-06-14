@@ -121,7 +121,7 @@ PortfolioAdvisor/
 
 There is no `main.py`, no orchestration loop, and no MCP client code to maintain. That code is what the managed harness runs for you.
 
-> **How this was scaffolded:** this project was created once with `agentcore create --name PortfolioAdvisor --model-provider bedrock` (which generates `harness.json`); we added the system prompt and reference data. Your harness **execution role** is pre-provisioned in your account, so `agentcore deploy` just works. (You'll create the outbound credential provider for the Gateway yourself in Lab 2.)
+> **How this was scaffolded:** this project was created once with `agentcore create` followed by `agentcore add harness --name PortfolioAdvisor --model-id global.anthropic.claude-sonnet-4-6` (which generates `harness.json`); we added the system prompt and reference data. Your harness **execution role** is pre-provisioned in your account, so `agentcore deploy` just works. (You'll create the outbound credential provider for the Gateway yourself in Lab 2.)
 
 ::::
 
@@ -194,13 +194,13 @@ AgentCore gives each session ID its own microVM context. Let's prove it.
 
 :::code{language=bash}
 agentcore invoke --harness PortfolioAdvisor --session-id $SESSION_ID \
-  "I'm interested in tech stocks"
+  "Let's analyze Goldman Sachs."
 
 agentcore invoke --harness PortfolioAdvisor --session-id $SESSION_ID \
-  "Compare the two biggest ones"
+  "What's its PE ratio and risk level?"
 :::
 
-The agent compares AAPL and MSFT without you naming them — it remembers the session context.
+The agent answers for Goldman Sachs — it resolves "its" from the session context, even though you never repeated the ticker.
 
 **New session — context is gone:**
 
@@ -208,22 +208,16 @@ The agent compares AAPL and MSFT without you naming them — it remembers the se
 NEW_SESSION=$(python3 -c 'import uuid; print(uuid.uuid4())')
 
 agentcore invoke --harness PortfolioAdvisor --session-id $NEW_SESSION \
-  "Compare the two biggest ones"
+  "What's its PE ratio and risk level?"
 :::
 
-The agent doesn't know what "the two biggest ones" refers to — because the new session has no prior context. This is microVM-level session isolation: each session ID is a separate execution environment with no shared state. It's also a security property — one user's session can't read another's.
+The agent has no idea what "its" refers to — it asks you to specify a stock, because the new session has no prior context. This is microVM-level session isolation: each session ID is a separate execution environment with no shared state. It's also a security property — one user's session can't read another's.
 
 ---
 
 ## Step 6 — One trace in CloudWatch
 
-View recent logs via CLI:
-
-:::code{language=bash}
-agentcore logs --harness PortfolioAdvisor --since 10m
-:::
-
-For the visual trace view:
+Every invoke is auto-instrumented. View the traces in the console:
 
 1. Open the [CloudWatch console](https://console.aws.amazon.com/cloudwatch/)
 2. Navigate to **GenAI Observability** → **Bedrock AgentCore**

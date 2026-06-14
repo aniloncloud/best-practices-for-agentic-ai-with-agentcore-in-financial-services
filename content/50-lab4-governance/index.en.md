@@ -282,10 +282,6 @@ For FSI, it's not enough that the agent works correctly — you need to *prove* 
 
 ### View Agent Reasoning Traces
 
-```bash
-agentcore logs --harness PortfolioAdvisor --since 5m
-```
-
 In the CloudWatch GenAI Observability dashboard (**GenAI Observability → Bedrock AgentCore → PortfolioAdvisor → DEFAULT**), each trace shows the agent's tool selection decision, input parameters, and success or failure result.
 
 ### View Policy Decisions
