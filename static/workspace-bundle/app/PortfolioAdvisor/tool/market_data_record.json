@@ -1,0 +1,12 @@
+{
+  "mcp": {
+    "server": {
+      "schemaVersion": "2025-12-11",
+      "inlineContent": "{\"name\":\"market-data/mcp-server\",\"description\":\"Real-time market quotes, historical prices, and sector performance data\",\"version\":\"1.0.0\"}"
+    },
+    "tools": {
+      "protocolVersion": "2024-11-05",
+      "inlineContent": "{\"tools\":[{\"name\":\"get_market_quote\",\"description\":\"Get real-time market quote for a ticker symbol including bid/ask, volume, and last trade price\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"ticker\":{\"type\":\"string\",\"description\":\"Stock ticker symbol (e.g., AAPL, MSFT)\"}},\"required\":[\"ticker\"]}},{\"name\":\"get_historical_prices\",\"description\":\"Get historical daily closing prices for a ticker over a specified period\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"ticker\":{\"type\":\"string\",\"description\":\"Stock ticker symbol\"},\"period\":{\"type\":\"string\",\"description\":\"1W, 1M, 3M, or 1Y\"}},\"required\":[\"ticker\",\"period\"]}},{\"name\":\"get_sector_performance\",\"description\":\"Get performance metrics for a market sector including top/bottom performers\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"sector\":{\"type\":\"string\",\"description\":\"Technology, Financials, Healthcare, Energy, or Consumer Discretionary\"}},\"required\":[\"sector\"]}}]}"
+    }
+  }
+}

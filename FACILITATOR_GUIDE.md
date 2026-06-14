@@ -134,12 +134,30 @@ Participants continue these at their own pace after the 60-minute session ends. 
 | Lab | Duration | Topic |
 |-----|----------|-------|
 | **Observability Deep Dive** (`25-lab1b-observability`) | ~15 min | CloudWatch GenAI traces, session isolation deep dive, token metrics, multi-tool trace inspection |
-| **Enterprise Tool Registry** (`35-lab2b-tool-registry`) | ~30 min | Two layers: approve a Market Data MCP server for the agent (Gateway add), then publish + govern it org-wide via AWS Agent Registry (create registry, publish record, submit/approve workflow, hybrid search) |
+| **Enterprise Tool Registry** (`35-lab2b-tool-registry`) | ~15 min | The new material Lab 2 doesn't cover: publish + govern an MCP server org-wide via AWS Agent Registry (inspect registry, publish record, submit → review → approve, hybrid search), then a talk-track handoff to the Gateway (Lab 2) for agent use |
 | **Evaluations** (`60-lab5-evaluations`) | ~20 min | Online eval with GoalSuccessRate, Correctness, ToolSelectionAccuracy; CloudWatch GenAI Observability dashboard |
 | **OAuth Token Flows: M2M & Token Lifecycle** (`40-lab3-security`) | ~20 min | Cognito M2M client_credentials flow, token lifecycle, auth code flow, web client setup |
 | **VPC Networking** (`70-lab6-vpc`) | ~20 min | Private subnets, VPC endpoints for AgentCore/Bedrock/SSM, network isolation patterns |
 | **Memory** (`80-optional-memory`) | ~20 min | Persistent client memory with SEMANTIC and SUMMARIZATION strategies |
 | **Cost Optimization** (`88-optional-cost`) | ~15 min | Session lifecycle (`sessionConfig`), eval sampling rate tuning (100% → 20%) |
+
+**Provisioning note — Enterprise Tool Registry:** This lab needs an AWS Agent Registry pre-provisioned per account, with its ID published to SSM at `/app/portfolioadvisor/agentcore/tool_registry_id`. Pre-create it with auto-approval **off** (so participants exercise the submit → approve workflow) and the ~1–2 min provisioning wait happens before the event. Participant roles therefore do **not** need `CreateRegistry`/`DeleteRegistry` — only: `bedrock-agentcore-control:GetRegistry`, `CreateRegistryRecord`, `SubmitRegistryRecordForApproval`, `UpdateRegistryRecordStatus`, and `bedrock-agentcore:SearchRegistryRecords`. If the SSM parameter is absent, the lab page tells participants to skip.
+
+**Troubleshooting — Lab 1 deploy fails ("CDK synth failed: pyproject.toml not found", or `harness.json` missing):** The devbox now fails provisioning fast if the scaffold isn't a harness project, so a fresh event shouldn't hit this. If a participant on an **older/already-running** box does, their `agentcore/agentcore.json` is a code-agent scaffold (`"runtimes"` entry, no `"harnesses"`). `agentcore validate` passes anyway, but `deploy` builds the wrong thing. Re-syncing assets does **not** fix it — `agentcore/` is generated at instance boot, not part of the bundle. Regenerate it as a harness project:
+
+```bash
+rm -rf /tmp/acgen && mkdir -p /tmp/acgen && cd /tmp/acgen
+agentcore create --no-agent --project-name PortfolioAdvisor
+cd /tmp/acgen/PortfolioAdvisor && agentcore add harness \
+  --name PortfolioAdvisor --model-id global.anthropic.claude-sonnet-4-6 --no-memory
+rm -rf ~/PortfolioAdvisor/agentcore
+cp -r /tmp/acgen/PortfolioAdvisor/agentcore ~/PortfolioAdvisor/agentcore
+echo "[{\"name\":\"default\",\"description\":\"Workshop deployment target\",\"account\":\"$(aws sts get-caller-identity --query Account --output text)\",\"region\":\"us-west-2\"}]" > ~/PortfolioAdvisor/agentcore/aws-targets.json
+cd ~/PortfolioAdvisor/agentcore/cdk && npm install
+cd ~/PortfolioAdvisor && agentcore validate && agentcore deploy -y -v
+```
+
+Afterward `agentcore/agentcore.json` should show a `"harnesses"` entry (not `"runtimes"`). The cleanest fix at scale is to **relaunch the event** so every box provisions from current `static/`.
 
 ---
 

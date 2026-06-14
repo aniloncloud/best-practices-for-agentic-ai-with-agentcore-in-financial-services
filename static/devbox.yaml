@@ -1531,6 +1531,30 @@ Resources:
           echo '[{"name":"default","description":"Workshop deployment target","account":"${AWS::AccountId}","region":"${AWS::Region}"}]' > /home/ec2-user/workspace/my-workspace/agentcore/aws-targets.json
           chown ec2-user:ec2-user /home/ec2-user/workspace/my-workspace/agentcore/aws-targets.json
 
+          # ------------------------------------------------------------------
+          # Fail-fast harness guard
+          # ------------------------------------------------------------------
+          # `agentcore validate` does NOT catch a code-agent scaffold: a stale or
+          # wrong `agentcore create` produces an agentcore.json with a "runtimes"
+          # (code agent) entry and no "harnesses". That passes validate but fails
+          # Lab 1 `agentcore deploy` with a confusing CDK synth error
+          # ("pyproject.toml not found"). Catch it HERE, at provision time, so a
+          # bad instance is obvious instead of breaking the first lab.
+          AGENTCORE_JSON=/home/ec2-user/workspace/my-workspace/agentcore/agentcore.json
+          HARNESS_JSON=/home/ec2-user/workspace/my-workspace/app/PortfolioAdvisor/harness.json
+          if [ ! -f "$HARNESS_JSON" ]; then
+            echo "ERROR: harness file missing at $HARNESS_JSON (workspace bundle app/ not delivered?)" | tee -a "$STATUS_FILE"
+            exit 1
+          fi
+          if ! python3 -c "import json,sys; d=json.load(open('/home/ec2-user/workspace/my-workspace/agentcore/agentcore.json')); sys.exit(0 if d.get('harnesses') and not d.get('runtimes') else 1)"; then
+            echo "ERROR: agentcore.json is not a harness project (code-agent 'runtimes' entry detected, or no 'harnesses'). Lab 1 deploy would fail with a CDK synth error." | tee -a "$STATUS_FILE"
+            exit 1
+          fi
+          if ! su - ec2-user -c "cd /home/ec2-user/workspace/my-workspace && agentcore validate"; then
+            echo "ERROR: 'agentcore validate' failed at provision time" | tee -a "$STATUS_FILE"
+            exit 1
+          fi
+          echo "INFO: harness scaffold verified (agentcore.json registers a harness; harness.json present; validate OK)"
 
           echo "INFO: Workshop setup completed at $(date)"
 
