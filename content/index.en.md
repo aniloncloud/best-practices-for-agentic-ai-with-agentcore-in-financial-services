@@ -7,13 +7,12 @@ Welcome to the Best Practices for Agentic AI with AgentCore in Financial Service
 
 Building production-ready AI agents requires careful planning and execution across the entire development lifecycle. The difference between a prototype that impresses in a demo and an agent that delivers value in production is achieved through disciplined engineering practices, robust architecture, and continuous improvement.
 
-This workshop explores essential best practices for building enterprise AI agents using Amazon Bedrock AgentCore. [Amazon Bedrock AgentCore](https://aws.amazon.com/bedrock/agentcore/) is and integrated platform that has everything you need to build, connect, optimize, and manage AI agents at scale. We cover everything from initial deployment to organizational scaling, with practical guidance that you can apply immediately.
+This workshop explores essential best practices for building enterprise AI agents using [Amazon Bedrock AgentCore](https://aws.amazon.com/bedrock/agentcore/). We cover everything from initial deployment to organizational scaling, with practical guidance that you can apply immediately.
 
 ![Best Practices](/static/images/BestPractices-InANutshell.png)
 
-Amazon Bedrock AgentCore supports various interfaces for developing and deploying your agent code. At the lowest level, you can interact with the AgentCore APIs directly or through the [AWS SDKs](https://docs.aws.amazon.com/sdkref/latest/guide/overview.html). For a simpler development experience, the [AgentCore Python SDK](https://github.com/aws/bedrock-agentcore-sdk-python) and [AgentCore Typescript SDK](https://github.com/aws/bedrock-agentcore-sdk-typescript) provide higher-level abstractions for integrating with AgentCore features. The [AgentCore CLI](https://github.com/aws/agentcore-cli) builds on top of these, offering the best developer experience that lets you quickly scaffold, configure, and deploy agents. This workshop focuses on the AgentCore CLI.
 
-## What is the AgentCore?
+## What is AgentCore?
 
 Amazon Bedrock AgentCore is a modular set of capabilities to build, deploy and operate production-grade agents securely and scalably using any framework and model.
 
@@ -21,6 +20,8 @@ AgentCore capabilities are optimized to work together or individually, giving yo
 
 
 ![AgentCore features Overview](/static/images/ac_overviewchart.png)
+
+Amazon Bedrock AgentCore supports various interfaces for developing and deploying your agent code. At the lowest level, you can interact with the AgentCore APIs directly or through the [AWS SDKs](https://docs.aws.amazon.com/sdkref/latest/guide/overview.html). For a simpler development experience, the [AgentCore Python SDK](https://github.com/aws/bedrock-agentcore-sdk-python) and [AgentCore Typescript SDK](https://github.com/aws/bedrock-agentcore-sdk-typescript) provide higher-level abstractions for integrating with AgentCore features. The [AgentCore CLI](https://github.com/aws/agentcore-cli) builds on top of these, offering the best developer experience that lets you quickly scaffold, configure, and deploy agents. This workshop focuses on the AgentCore CLI.
 
 ### AgentCore features Used in This Workshop
 
