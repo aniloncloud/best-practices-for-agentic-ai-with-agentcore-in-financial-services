@@ -1,7 +1,6 @@
 ---
 title: "Optional Lab: Build Client Portal"
 weight: 85
-hidden: true
 ---
 
 **Optional** — This lab builds a web chat interface using Flask with Cognito login that connects to your deployed agent. Skip it if you're short on time and continue to the Summary.
