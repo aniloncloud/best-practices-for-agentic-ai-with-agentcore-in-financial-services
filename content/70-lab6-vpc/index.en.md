@@ -263,4 +263,4 @@ VPC isolation ensures agent traffic stays within the AWS Region — it cannot be
 
 → Next: [Summary](../90-summary/)
 
-*(Optional labs available: [Memory](../80-optional-memory/) | [Frontend](../85-optional-frontend/) | [Cost Optimization](../88-optional-cost/))*
+*(Optional labs available: [Memory](../80-optional-memory/) | [Cost Optimization](../88-optional-cost/))*

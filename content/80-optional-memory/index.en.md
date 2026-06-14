@@ -276,4 +276,4 @@ AgentCore Runtime (PortfolioAdvisor)
 
 ---
 
-→ Next: [Optional Frontend Lab](../85-optional-frontend/) or [Summary](../90-summary/)
+→ Next: [Summary](../90-summary/)

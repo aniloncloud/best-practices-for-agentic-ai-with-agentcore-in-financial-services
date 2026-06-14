@@ -134,12 +134,11 @@ Participants continue these at their own pace after the 60-minute session ends. 
 | Lab | Duration | Topic |
 |-----|----------|-------|
 | **Observability Deep Dive** (`25-lab1b-observability`) | ~15 min | CloudWatch GenAI traces, session isolation deep dive, token metrics, multi-tool trace inspection |
-| **Enterprise Tool Registry** (`35-lab2b-tool-registry`) | ~20 min | Enterprise tool approval workflow: review security posture of a Market Data MCP server, add to Gateway |
-| **OAuth Token Flows: M2M & Token Lifecycle** (`40-lab3-security`) | ~20 min | Cognito M2M client_credentials flow, token lifecycle, auth code flow, web client setup |
+| **Enterprise Tool Registry** (`35-lab2b-tool-registry`) | ~30 min | Two layers: approve a Market Data MCP server for the agent (Gateway add), then publish + govern it org-wide via AWS Agent Registry (create registry, publish record, submit/approve workflow, hybrid search) |
 | **Evaluations** (`60-lab5-evaluations`) | ~20 min | Online eval with GoalSuccessRate, Correctness, ToolSelectionAccuracy; CloudWatch GenAI Observability dashboard |
+| **OAuth Token Flows: M2M & Token Lifecycle** (`40-lab3-security`) | ~20 min | Cognito M2M client_credentials flow, token lifecycle, auth code flow, web client setup |
 | **VPC Networking** (`70-lab6-vpc`) | ~20 min | Private subnets, VPC endpoints for AgentCore/Bedrock/SSM, network isolation patterns |
 | **Memory** (`80-optional-memory`) | ~20 min | Persistent client memory with SEMANTIC and SUMMARIZATION strategies |
-| **Frontend** (`85-optional-frontend`) | ~20 min | Flask chat portal with Cognito login and AgentCore REST invocation |
 | **Cost Optimization** (`88-optional-cost`) | ~15 min | Session lifecycle (`sessionConfig`), eval sampling rate tuning (100% → 20%) |
 
 ---
@@ -289,11 +288,6 @@ Participants continue these at their own pace after the 60-minute session ends. 
 - Memory requires cloud deployment — `agentcore dev` does not use AgentCore Memory.
 - If the memory recall test returns "I don't know anything about you", the memory extraction job may not have finished. Wait 1–2 minutes and retry with a new session ID.
 - If deployment fails with a header-related error, check that `requestHeaderAllowlist` was added to the runtime entry in agentcore.json.
-
-**Self-Paced: Frontend (`85-optional-frontend`):**
-- If the login redirect loops back to the login page without signing in, confirm the web client ID was added to BOTH `allowedClients` arrays in agentcore.json — one in the runtime's `authorizerConfiguration` and one in the gateway's `authorizerConfiguration`.
-- If the Flask app starts but the Runtime ARN shows NOT FOUND, the `deployed-state.json` file is either missing or doesn't contain the PortfolioAdvisor runtime entry. Run `agentcore status` to verify the runtime is deployed.
-- If the chat sends a message but gets a 401 response, the session-stored token has expired. Log out and log back in via the Cognito hosted UI.
 
 **Self-Paced: Cost Optimization (`88-optional-cost`):**
 - The `sessionConfig` block is a direct agentcore.json edit — no CLI flag exists for session lifecycle parameters.

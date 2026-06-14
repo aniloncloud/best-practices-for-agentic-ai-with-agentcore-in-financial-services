@@ -79,11 +79,10 @@ The agent is defined declaratively in `app/PortfolioAdvisor/harness.json` — mo
 |-----|-------|------|----------------|
 | [Observability Deep Dive](../25-lab1b-observability/) | Observability Deep Dive | ~15 min | Traces, session isolation, token metrics, CloudWatch GenAI dashboards |
 | [OAuth Token Flows](../40-lab3-security/) | OAuth Token Flows: M2M & Token Lifecycle | ~20 min | M2M client credentials, token introspection, full lifecycle |
-| [Enterprise Tool Registry](../35-lab2b-tool-registry/) | Enterprise Tool Registry | ~20 min | Tool approval workflow, security review, MCP server registration |
+| [Enterprise Tool Registry](../35-lab2b-tool-registry/) | Enterprise Tool Registry | ~30 min | Gateway tool approval + AWS Agent Registry: publish, govern, and discover MCP servers org-wide |
 | [Evaluations](../60-lab5-evaluations/) | Evaluations | ~15 min | Continuous quality monitoring with built-in LLM-as-a-Judge evaluators |
 | [VPC Networking](../70-lab6-vpc/) | VPC Networking | ~15 min | Private subnet isolation, VPC endpoints, PrivateLink |
 | [Memory](../80-optional-memory/) | Add Persistent Memory | ~20 min | SEMANTIC and SUMMARIZATION memory strategies |
-| [Frontend](../85-optional-frontend/) | Build Client Portal | ~20 min | Flask chat frontend with Cognito login |
 | [Cost Optimization](../88-optional-cost/) | Cost Optimization | ~15 min | Session lifecycle, eval sampling, token monitoring |
 
 :::alert{header="Continue after the session" type="info"}

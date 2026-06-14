@@ -502,6 +502,7 @@ Resources:
           Value: !Sub ${EnvironmentTag}
   routepublic:
     Type: AWS::EC2::Route
+    DependsOn: internetgatewayattach
     Properties:
       RouteTableId: !Ref routetablepublic
       DestinationCidrBlock: 0.0.0.0/0
@@ -688,6 +689,7 @@ Resources:
   ### Access Layer - ALB and CloudFront distribution for secure access to code-server
   albcodeserver:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    DependsOn: internetgatewayattach
     Properties:
       Name: !Sub ${PrefixCode}-alb-codeserver
       Scheme: internet-facing

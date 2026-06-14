@@ -29,7 +29,7 @@ A hands-on AWS workshop for builders in financial services. Participants take a 
 │   ├── 60-lab5-evaluations/          # Evaluations (online eval, GoalSuccessRate)
 │   ├── 70-lab6-vpc/                  # VPC Networking (private subnets, VPC endpoints)
 │   ├── 80-optional-memory/           # Memory (semantic + summarization strategies)
-│   ├── 85-optional-frontend/         # Frontend (Flask chat portal)
+│   ├── 85-optional-frontend/         # Frontend (Flask chat portal) — hidden for now
 │   ├── 88-optional-cost/             # Cost Optimization (session lifecycle, eval sampling)
 │   └── 90-summary/                   # Summary and resources
 │

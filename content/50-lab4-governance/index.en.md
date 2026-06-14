@@ -315,48 +315,21 @@ This audit trail is constructed automatically from CloudWatch data — no additi
 
 ---
 
-## Finished Early?
+## Finished Early? Start a Self-Paced Lab
 
-### Rung 1: Add a Restricted-Ticker Policy
+Your event account stays available for a limited time after the Summit, but you can begin any of these now — they go deeper than the live track and need no extra setup:
 
-Firms maintain a **restricted (grey) list** — securities employees can't trade because of a conflict, an active advisory engagement, or an earnings blackout. Suppose your firm is advising on a Goldman Sachs transaction, so **GS** is on the restricted list this quarter — regardless of the fact that the agent's own reference data rates GS a "Buy". Cedar's `forbid` keyword creates an absolute block that overrides any `permit`. Add a third policy:
+| Self-paced lab | What you'll do | ~Time |
+|---|---|---|
+| [Observability Deep Dive](../25-lab1b-observability/) | X-Ray spans, token metrics, session-isolation traces, custom dashboards | 20 min |
+| [Enterprise Tool Registry](../35-lab2b-tool-registry/) | Tool approval workflow, security review, MCP server registration | 20 min |
+| [Evaluations](../60-lab5-evaluations/) | Score agent accuracy and guard against regressions | 25 min |
+| [OAuth Token Flows](../40-lab3-security/) | M2M auth, token exchange with Workload Identity, on-behalf-of (OBO) identity propagation | 25 min |
+| [VPC Networking](../70-lab6-vpc/) | Keep agent and client traffic inside your VPC | 20 min |
 
-```bash
-agentcore add policy \
-  --name restricted_ticker_policy \
-  --engine PortfolioAdvisorPolicyEngine \
-  --description "Block trades on restricted securities" \
-  --statement "forbid(principal, action == AgentCore::Action::\"ExecuteTrade___execute_trade\", resource == AgentCore::Gateway::\"${GATEWAY_ARN}\") when { [\"GS\"].contains(context.input.ticker) };" \
-  --validation-mode IGNORE_ALL_FINDINGS
-```
+Pick whichever maps to your CISO question or your own roadmap — they're independent, so start with the one that matters most to you.
 
-```bash
-agentcore deploy -y -v
-```
-
-Then test it — a **small** trade (well under the 1,000-share limit) on the restricted ticker:
-
-```bash
-agentcore invoke --harness PortfolioAdvisor \
-  "Execute a trade: buy 100 shares of GS at market price" \
-  --bearer-token "$TOKEN"
-```
-
-Denied — even though 100 < 1000. The agent's reference data even rates GS a "Buy", so it goes ahead and calls `execute_trade`; the Gateway then blocks it because the `forbid` on `GS` overrides the quantity `permit`. **Cedar `forbid` always wins over `permit`** — and it's enforced at the Gateway, not left to the model's judgment.
-
-### Rung 2: Observability Deep Dive
-
-Explore latency tracing, custom metrics, and the CloudWatch GenAI Observability dashboard:
-
-→ [Observability Deep Dive](../25-lab1b-observability/)
-
-### Rung 3: OAuth Token Flows — M2M and Token Lifecycle
-
-Go deeper on machine-to-machine authentication, token exchange with Workload Identity, and multi-agent identity propagation:
-
-→ [Lab 3 (Self-Paced): OAuth Token Flows](../40-lab3-security/)
-
-**Your event account stays available for a limited time after the Summit** — the self-paced labs are available to continue then.
+> **Want to see Cedar's `forbid` win over `permit`?** The Best Practices below show the one-line restricted-ticker pattern (`forbid ... when { restricted_list.contains(...) }`) — `forbid` always overrides `permit`, enforced at the Gateway.
 
 ---
 

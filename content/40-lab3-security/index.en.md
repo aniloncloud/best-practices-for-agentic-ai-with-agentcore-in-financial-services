@@ -1,6 +1,6 @@
 ---
 title: "Optional Lab: OAuth Token Flows — M2M & Token Lifecycle"
-weight: 55
+weight: 67
 ---
 
 **⏱️ ~20 minutes (self-paced)**

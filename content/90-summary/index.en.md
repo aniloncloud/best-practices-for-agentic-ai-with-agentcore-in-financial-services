@@ -22,7 +22,7 @@ Over the course of this workshop, you deployed a production-ready portfolio advi
 |-----|-------------|-------------------|
 | Observability Deep Dive | Explored traces, session isolation, token metrics, CloudWatch dashboards | CloudWatch GenAI Observability |
 | OAuth Token Flows | Deep dive into M2M token flows and token lifecycle management | AgentCore Identity |
-| Enterprise Tool Registry | Reviewed and approved a Market Data MCP server through enterprise tool governance workflow | AgentCore Gateway (Registry) |
+| Enterprise Tool Registry | Approved a Market Data MCP server for the agent (Gateway), then published and governed it org-wide through a publish → approve → search workflow | AgentCore Gateway + AWS Agent Registry |
 | Evaluations | Configured continuous quality monitoring with built-in evaluators | AgentCore Evaluations |
 | VPC Networking | Deployed agent into VPC with private subnet isolation and VPC endpoints | AgentCore Runtime (VPC mode) |
 | Memory | Added persistent memory with SEMANTIC and SUMMARIZATION strategies | AgentCore Memory |
