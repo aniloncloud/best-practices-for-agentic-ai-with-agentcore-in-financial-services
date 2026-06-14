@@ -221,7 +221,18 @@ as reference one-liners.
 
 - **`HarnessExecutionRole`** (`workshop-harness-execution-role`) — full harness runtime
   policy (Bedrock, InvokeGateway, OAuth2 token vault + secret, workload identity, ECR
-  Public, logs, X-Ray, CW metrics). ARN → SSM `harness_execution_role_arn`.
+  Public, logs, X-Ray, CW metrics). ARN → SSM `harness_execution_role_arn`. The devbox
+  patches `app/PortfolioAdvisor/harness.json` at provision time to set
+  `executionRoleArn` to this role, so every harness deploy uses one stable, audited,
+  least-privilege role. The managed-harness CDK imports an externally-supplied
+  `executionRoleArn` as-is (`Role.fromRoleArn`, `mutable:false`) and attaches **no**
+  scoped policies to it — so this role must (and does) carry the complete permission set,
+  including the X-Ray/logs/CW-metrics perms that make CloudWatch GenAI Observability work
+  from the first invoke. If the role is somehow absent, the devbox skips the patch and the
+  CDK falls back to generating its own role (which also includes observability perms), so
+  Labs 1–3 still work either way. OTEL needs no enabling: the managed harness
+  auto-instruments every invocation with OpenTelemetry — there is no harness-level OTEL
+  knob in the CLI/schema (only code-agent *runtimes* expose `instrumentation.enableOtel`).
 - **`GatewayServiceRole`** (`workshop-gateway-service-role`) — `lambda:InvokeFunction` on
   both targets **+ policy-engine authorization perms** so the Lab 3 attachment succeeds
   without the manual workaround. ARN → SSM `gateway_service_role_arn`. Lab 2 passes it via

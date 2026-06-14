@@ -1583,6 +1583,33 @@ Resources:
           fi
 
           # ------------------------------------------------------------------
+          # Tie the harness to the pre-provisioned execution role (Labs 1-3).
+          # The managed-harness CDK imports an externally-supplied executionRoleArn
+          # as-is (Role.fromRoleArn, mutable:false) and attaches NO scoped policies
+          # to it, so the role MUST already carry the full harness permission set.
+          # The pre-provisioned `workshop-harness-execution-role` (prereqs.yaml) is
+          # a verified complete superset: Bedrock invoke, InvokeGateway,
+          # OAuth2/workload identity, ECR Public, CloudWatch logs, X-Ray, and CW
+          # metrics — so traces and GenAI Observability work from the first invoke
+          # with a stable, audited, least-privilege role. The CDK still emits the
+          # `ApplicationHarness<Name>RoleRoleArn` output the deployer requires even
+          # for an imported role. If the role is absent (prereqs failed), we skip
+          # the patch and the CDK falls back to generating its own role (which also
+          # carries the observability perms). NON-FATAL.
+          # ------------------------------------------------------------------
+          HARNESS_ROLE_ARN="arn:aws:iam::${AWS::AccountId}:role/workshop-harness-execution-role"
+          if [ -f "$HARNESS_JSON" ] && aws iam get-role --role-name workshop-harness-execution-role >/dev/null 2>&1; then
+            if HJ="$HARNESS_JSON" RA="$HARNESS_ROLE_ARN" python3 -c "import json,os; p=os.environ['HJ']; d=json.load(open(p)); d['executionRoleArn']=os.environ['RA']; json.dump(d, open(p,'w'), indent=2)"; then
+              chown ec2-user:ec2-user "$HARNESS_JSON" 2>/dev/null || true
+              echo "INFO: harness.json wired to pre-provisioned execution role $HARNESS_ROLE_ARN"
+            else
+              echo "WARN: failed to patch harness.json executionRoleArn; CDK will generate its own role"
+            fi
+          else
+            echo "INFO: pre-provisioned harness role not found or harness.json missing; CDK generates its own execution role (observability perms still included)"
+          fi
+
+          # ------------------------------------------------------------------
           # Pre-provision the AWS Agent Registry (Optional Lab: Enterprise Tool
           # Registry) using the SAME `aws bedrock-agentcore-control` CLI the lab
           # uses — so registry-API support is guaranteed (no Lambda boto3 risk).
