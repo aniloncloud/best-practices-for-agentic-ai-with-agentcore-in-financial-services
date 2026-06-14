@@ -1496,8 +1496,24 @@ Resources:
           su - ec2-user -c "nvm use 22"
           su - ec2-user -c "nvm alias default 22"
           
-          # Install agentcore CLI and CDK dependencies
+          # Install agentcore CLI (preview build = harness support)
           su - ec2-user -c "npm install -g @aws/agentcore@preview"
+
+          # Generate the AgentCore project scaffold (agentcore/ + CDK) with the CLI itself,
+          # so the deployable infra ALWAYS matches the installed CLI version. The workshop
+          # bundle ships only the workshop-specific app/ (harness.json + tool schemas); the
+          # agentcore/ directory (CDK, agentcore.json) is generated here at provision time
+          # and is never committed to the content repo (avoids CDK/schema drift bugs).
+          #
+          # CONTRACT: the generated agentcore.json registers the harness with
+          #   "path": "app/PortfolioAdvisor"
+          # which must match the bundle's app dir (delivered to my-workspace/ by the
+          # Workshop Studio asset sync). If the bundle's app/PortfolioAdvisor/ dir is ever
+          # renamed, the harness name passed to `add harness` below must change to match,
+          # or `agentcore deploy` will report "No harnesses defined".
+          su - ec2-user -c "rm -rf /tmp/acgen && mkdir -p /tmp/acgen && cd /tmp/acgen && agentcore create --no-agent --project-name PortfolioAdvisor"
+          su - ec2-user -c "cd /tmp/acgen/PortfolioAdvisor && agentcore add harness --name PortfolioAdvisor --model-id global.anthropic.claude-sonnet-4-6 --no-memory"
+          su - ec2-user -c "cp -r /tmp/acgen/PortfolioAdvisor/agentcore /home/ec2-user/workspace/my-workspace/agentcore && rm -rf /tmp/acgen"
           su - ec2-user -c "cd /home/ec2-user/workspace/my-workspace/agentcore/cdk && npm install"
 
 

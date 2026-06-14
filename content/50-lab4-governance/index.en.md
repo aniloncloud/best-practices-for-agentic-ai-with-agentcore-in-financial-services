@@ -319,26 +319,30 @@ This audit trail is constructed automatically from CloudWatch data — no additi
 
 ### Rung 1: Add a Restricted-Ticker Policy
 
-Cedar's `forbid` keyword creates an absolute block that overrides any `permit`. Add a third policy that blocks trades on securities the firm has designated as restricted:
+Firms maintain a **restricted (grey) list** — securities employees can't trade because of a conflict, an active advisory engagement, or an earnings blackout. Suppose your firm is advising on a Goldman Sachs transaction, so **GS** is on the restricted list this quarter — regardless of the fact that the agent's own reference data rates GS a "Buy". Cedar's `forbid` keyword creates an absolute block that overrides any `permit`. Add a third policy:
 
 ```bash
 agentcore add policy \
   --name restricted_ticker_policy \
   --engine PortfolioAdvisorPolicyEngine \
   --description "Block trades on restricted securities" \
-  --statement "forbid(principal, action == AgentCore::Action::\"ExecuteTrade___execute_trade\", resource == AgentCore::Gateway::\"${GATEWAY_ARN}\") when { [\"RESTRICTED-001\", \"RESTRICTED-002\"].contains(context.input.ticker) };" \
+  --statement "forbid(principal, action == AgentCore::Action::\"ExecuteTrade___execute_trade\", resource == AgentCore::Gateway::\"${GATEWAY_ARN}\") when { [\"GS\"].contains(context.input.ticker) };" \
   --validation-mode IGNORE_ALL_FINDINGS
 ```
 
-Then test it — try a trade that is within the quantity limit but on a restricted ticker:
+```bash
+agentcore deploy -y -v
+```
+
+Then test it — a **small** trade (well under the 1,000-share limit) on the restricted ticker:
 
 ```bash
 agentcore invoke --harness PortfolioAdvisor \
-  "Buy 100 shares of RESTRICTED-001 at market price" \
+  "Execute a trade: buy 100 shares of GS at market price" \
   --bearer-token "$TOKEN"
 ```
 
-Denied — even though 100 < 1000. The `forbid` on `RESTRICTED-001` overrides the `permit` for quantity < 1000. Cedar `forbid` always wins over `permit`.
+Denied — even though 100 < 1000. The agent's reference data even rates GS a "Buy", so it goes ahead and calls `execute_trade`; the Gateway then blocks it because the `forbid` on `GS` overrides the quantity `permit`. **Cedar `forbid` always wins over `permit`** — and it's enforced at the Gateway, not left to the model's judgment.
 
 ### Rung 2: Observability Deep Dive
 

@@ -3,7 +3,7 @@ title: "Lab 2: Connect Tools with Gateway + JWT Auth"
 weight: 30
 ---
 
-**⏱️ ~18 minutes (one deploy, ~2–3 min — you'll read through it)**
+**⏱️ ~20 minutes (two deploys — the first Gateway create can take 5–8 min; you'll read through them)**
 
 ## Overview
 
@@ -123,7 +123,7 @@ Now deploy the Gateway so it exists in AWS — the next step attaches it to the 
 agentcore deploy -y -v
 ```
 
-This first deploy (~2–3 min) creates the Gateway and its two Lambda targets. (You'll deploy once more at Step 7 after wiring the harness.)
+This first deploy creates the Gateway and its two Lambda targets. **First-time Gateway creation typically takes 5–8 minutes** — the CLI shows a spinner while CloudFormation provisions it, so don't worry if it sits on "Deploying gateways..." for a few minutes; it's working, not stuck. (You'll deploy once more at Step 7 after wiring the harness.)
 
 ---
 
@@ -227,7 +227,7 @@ agentcore validate
 agentcore deploy -y -v
 ```
 
-This is the **second deploy in this lab** (the first created the Gateway in Step 3) and the last one until Lab 3. While it runs (~2–3 min), work through Step 8.
+This is the **second deploy in this lab** (the first created the Gateway in Step 3) and the last one until Lab 3. The harness redeploy runs ~3–4 min; while it runs, work through Step 8.
 
 ---
 

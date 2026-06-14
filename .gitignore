@@ -21,8 +21,3 @@ conductor/
 
 # Secrets — never commit
 **/.env.local
-
-# AgentCore instance-specific state (regenerated per account/region;
-# aws-targets.json is written by devbox.yaml, deployed-state.json by `agentcore deploy`)
-static/workspace-bundle/agentcore/.cli/deployed-state.json
-static/workspace-bundle/agentcore/aws-targets.json

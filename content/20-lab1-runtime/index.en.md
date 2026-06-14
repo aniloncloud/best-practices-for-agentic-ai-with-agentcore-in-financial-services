@@ -3,7 +3,7 @@ title: "Lab 1: Deploy to the AgentCore Harness"
 weight: 20
 ---
 
-**⏱️ ~10 minutes (2–3 of them are a deploy you'll read through)**
+**⏱️ ~10 minutes (2–4 of them are a deploy you'll read through)**
 
 ## Overview
 
@@ -30,7 +30,7 @@ agentcore invoke ──────▶│                                     �
 
 ## Step 1 — See the agent, then start the deploy
 
-Your agent is a single file. Look at it first, then kick off the deploy immediately — it takes 2–3 minutes, so start it and read Step 2 while it runs.
+Your agent is a single file. Look at it first, then kick off the deploy immediately — it takes 2–4 minutes, so start it and read Step 2 while it runs.
 
 :::code{language=bash}
 cd ~/PortfolioAdvisor
@@ -42,7 +42,7 @@ This one file *is* the agent: **`model`**, **`systemPrompt`** (which carries the
 Now start the deploy:
 
 :::alert{header="Run this BEFORE reading further" type="warning"}
-The deploy takes 2–3 minutes. Start it now, then read Step 2 while it runs — that reading is the designated activity during the wait.
+The deploy takes 2–4 minutes. Start it now, then read Step 2 while it runs — that reading is the designated activity during the wait.
 :::
 
 :::code{language=bash}
