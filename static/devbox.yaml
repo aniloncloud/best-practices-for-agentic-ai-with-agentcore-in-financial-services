@@ -1515,7 +1515,11 @@ Resources:
           # or `agentcore deploy` will report "No harnesses defined".
           su - ec2-user -c "rm -rf /tmp/acgen && mkdir -p /tmp/acgen && cd /tmp/acgen && agentcore create --no-agent --project-name PortfolioAdvisor"
           su - ec2-user -c "cd /tmp/acgen/PortfolioAdvisor && agentcore add harness --name PortfolioAdvisor --model-id global.anthropic.claude-sonnet-4-6 --no-memory"
-          su - ec2-user -c "cp -r /tmp/acgen/PortfolioAdvisor/agentcore /home/ec2-user/workspace/my-workspace/agentcore && rm -rf /tmp/acgen"
+          # Replace (do NOT merge into) any agentcore/ the seed may have created.
+          # `cp -r src/agentcore dest/agentcore` nests as dest/agentcore/agentcore
+          # when dest/agentcore already exists, leaving the wrong agentcore.json
+          # and no cdk/ dir. rm -rf first so the generated harness scaffold wins.
+          su - ec2-user -c "rm -rf /home/ec2-user/workspace/my-workspace/agentcore && cp -r /tmp/acgen/PortfolioAdvisor/agentcore /home/ec2-user/workspace/my-workspace/agentcore && rm -rf /tmp/acgen"
           su - ec2-user -c "cd /home/ec2-user/workspace/my-workspace/agentcore/cdk && npm install"
 
 
