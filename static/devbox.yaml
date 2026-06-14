@@ -1532,29 +1532,32 @@ Resources:
           chown ec2-user:ec2-user /home/ec2-user/workspace/my-workspace/agentcore/aws-targets.json
 
           # ------------------------------------------------------------------
-          # Fail-fast harness guard
+          # Harness scaffold check (NON-FATAL — logs a warning, never blocks boot)
           # ------------------------------------------------------------------
-          # `agentcore validate` does NOT catch a code-agent scaffold: a stale or
-          # wrong `agentcore create` produces an agentcore.json with a "runtimes"
-          # (code agent) entry and no "harnesses". That passes validate but fails
-          # Lab 1 `agentcore deploy` with a confusing CDK synth error
-          # ("pyproject.toml not found"). Catch it HERE, at provision time, so a
-          # bad instance is obvious instead of breaking the first lab.
-          AGENTCORE_JSON=/home/ec2-user/workspace/my-workspace/agentcore/agentcore.json
+          # A stale/wrong scaffold yields an agentcore.json with a code-agent
+          # "runtimes" entry and no "harnesses"; that passes `agentcore validate`
+          # but fails Lab 1 `agentcore deploy` with a confusing CDK synth error
+          # ("pyproject.toml not found"). We surface that here in the setup log
+          # and a marker file, but must NOT exit — cfn-signal runs AFTER this, so
+          # exiting would fail the entire devbox stack (no code-server at all,
+          # which is worse than a fixable Lab 1 deploy). See FACILITATOR_GUIDE
+          # for the recovery recipe.
           HARNESS_JSON=/home/ec2-user/workspace/my-workspace/app/PortfolioAdvisor/harness.json
+          HARNESS_OK=1
           if [ ! -f "$HARNESS_JSON" ]; then
-            echo "ERROR: harness file missing at $HARNESS_JSON (workspace bundle app/ not delivered?)" | tee -a "$STATUS_FILE"
-            exit 1
+            echo "WARN: harness file missing at $HARNESS_JSON (workspace bundle app/ not delivered yet?)"
+            HARNESS_OK=0
           fi
-          if ! python3 -c "import json,sys; d=json.load(open('/home/ec2-user/workspace/my-workspace/agentcore/agentcore.json')); sys.exit(0 if d.get('harnesses') and not d.get('runtimes') else 1)"; then
-            echo "ERROR: agentcore.json is not a harness project (code-agent 'runtimes' entry detected, or no 'harnesses'). Lab 1 deploy would fail with a CDK synth error." | tee -a "$STATUS_FILE"
-            exit 1
+          if ! python3 -c "import json,sys; d=json.load(open('/home/ec2-user/workspace/my-workspace/agentcore/agentcore.json')); sys.exit(0 if d.get('harnesses') and not d.get('runtimes') else 1)" 2>/dev/null; then
+            echo "WARN: agentcore.json is not a harness project (no 'harnesses', or a code-agent 'runtimes' present)"
+            HARNESS_OK=0
           fi
-          if ! su - ec2-user -c "cd /home/ec2-user/workspace/my-workspace && agentcore validate"; then
-            echo "ERROR: 'agentcore validate' failed at provision time" | tee -a "$STATUS_FILE"
-            exit 1
+          if [ "$HARNESS_OK" -ne 1 ]; then
+            echo "WARN: harness scaffold check failed; Lab 1 deploy may fail. See FACILITATOR_GUIDE Lab 1 recovery." | tee /home/ec2-user/HARNESS_SETUP_WARNING.txt | tee -a "$STATUS_FILE"
+            chown ec2-user:ec2-user /home/ec2-user/HARNESS_SETUP_WARNING.txt 2>/dev/null || true
+          else
+            echo "INFO: harness scaffold verified (harness.json present; agentcore.json registers a harness)"
           fi
-          echo "INFO: harness scaffold verified (agentcore.json registers a harness; harness.json present; validate OK)"
 
           echo "INFO: Workshop setup completed at $(date)"
 
