@@ -1520,24 +1520,16 @@ Resources:
           # Install agentcore CLI (preview build = harness support)
           su - ec2-user -c "npm install -g @aws/agentcore@preview"
 
-          # Generate the AgentCore project scaffold (agentcore/ + CDK) with the CLI itself,
-          # so the deployable infra ALWAYS matches the installed CLI version. The workshop
-          # bundle ships only the workshop-specific app/ (harness.json + tool schemas); the
-          # agentcore/ directory (CDK, agentcore.json) is generated here at provision time
-          # and is never committed to the content repo (avoids CDK/schema drift bugs).
-          #
-          # CONTRACT: the generated agentcore.json registers the harness with
-          #   "path": "app/PortfolioAdvisor"
-          # which must match the bundle's app dir (delivered to my-workspace/ by the
-          # Workshop Studio asset sync). If the bundle's app/PortfolioAdvisor/ dir is ever
-          # renamed, the harness name passed to `add harness` below must change to match,
-          # or `agentcore deploy` will report "No harnesses defined".
+          # Generate the AgentCore scaffold (agentcore/ + CDK) with the CLI so the
+          # deployable infra always matches the installed CLI version. The bundle
+          # ships only app/ (harness.json + tool schemas); agentcore/ is generated
+          # here, never committed (avoids CDK/schema drift).
+          # CONTRACT: agentcore.json registers the harness at "path": "app/PortfolioAdvisor",
+          # which must match the bundle's app dir; rename => change `add harness` too.
           su - ec2-user -c "rm -rf /tmp/acgen && mkdir -p /tmp/acgen && cd /tmp/acgen && agentcore create --no-agent --project-name PortfolioAdvisor"
           su - ec2-user -c "cd /tmp/acgen/PortfolioAdvisor && agentcore add harness --name PortfolioAdvisor --model-id global.anthropic.claude-sonnet-4-6 --no-memory"
-          # Replace (do NOT merge into) any agentcore/ the seed may have created.
-          # `cp -r src/agentcore dest/agentcore` nests as dest/agentcore/agentcore
-          # when dest/agentcore already exists, leaving the wrong agentcore.json
-          # and no cdk/ dir. rm -rf first so the generated harness scaffold wins.
+          # Replace (not merge) any seed agentcore/ — cp into an existing dir nests
+          # as agentcore/agentcore; rm -rf first so the generated scaffold wins.
           su - ec2-user -c "rm -rf /home/ec2-user/workspace/my-workspace/agentcore && cp -r /tmp/acgen/PortfolioAdvisor/agentcore /home/ec2-user/workspace/my-workspace/agentcore && rm -rf /tmp/acgen"
           su - ec2-user -c "cd /home/ec2-user/workspace/my-workspace/agentcore/cdk && npm install"
 
@@ -1554,17 +1546,9 @@ Resources:
           echo '[{"name":"default","description":"Workshop deployment target","account":"${AWS::AccountId}","region":"${AWS::Region}"}]' > /home/ec2-user/workspace/my-workspace/agentcore/aws-targets.json
           chown ec2-user:ec2-user /home/ec2-user/workspace/my-workspace/agentcore/aws-targets.json
 
-          # ------------------------------------------------------------------
-          # Harness scaffold check (NON-FATAL — logs a warning, never blocks boot)
-          # ------------------------------------------------------------------
-          # A stale/wrong scaffold yields an agentcore.json with a code-agent
-          # "runtimes" entry and no "harnesses"; that passes `agentcore validate`
-          # but fails Lab 1 `agentcore deploy` with a confusing CDK synth error
-          # ("pyproject.toml not found"). We surface that here in the setup log
-          # and a marker file, but must NOT exit — cfn-signal runs AFTER this, so
-          # exiting would fail the entire devbox stack (no code-server at all,
-          # which is worse than a fixable Lab 1 deploy). See FACILITATOR_GUIDE
-          # for the recovery recipe.
+          # Harness scaffold check (NON-FATAL): warn if agentcore.json is not a
+          # harness project; never exit (cfn-signal runs after this). See
+          # FACILITATOR_GUIDE for the Lab 1 recovery recipe.
           HARNESS_JSON=/home/ec2-user/workspace/my-workspace/app/PortfolioAdvisor/harness.json
           HARNESS_OK=1
           if [ ! -f "$HARNESS_JSON" ]; then
@@ -1582,30 +1566,13 @@ Resources:
             echo "INFO: harness scaffold verified (harness.json present; agentcore.json registers a harness)"
           fi
 
-          # ------------------------------------------------------------------
-          # Tie the harness to the pre-provisioned execution role (Labs 1-3).
-          # The managed-harness CDK imports an externally-supplied executionRoleArn
-          # as-is (Role.fromRoleArn, mutable:false) and attaches NO scoped policies
-          # to it, so the role MUST already carry the full harness permission set.
-          # The pre-provisioned `workshop-harness-execution-role` (prereqs.yaml) is
-          # a verified complete superset: Bedrock invoke, InvokeGateway,
-          # OAuth2/workload identity, ECR Public, CloudWatch logs, X-Ray, and CW
-          # metrics — so traces and GenAI Observability work from the first invoke
-          # with a stable, audited, least-privilege role. The CDK still emits the
-          # `ApplicationHarness<Name>RoleRoleArn` output the deployer requires even
-          # for an imported role. If the role is absent (prereqs failed), we skip
-          # the patch and the CDK falls back to generating its own role (which also
-          # carries the observability perms). NON-FATAL.
-          # ------------------------------------------------------------------
-          # The role name is deterministic and the role is created by the prereqs
-          # stack. We patch harness.json UNCONDITIONALLY rather than gating on a
-          # provision-time `aws iam get-role` check: the prereqs and devbox stacks
-          # deploy in parallel, so the role often does not exist yet when this
-          # UserData runs — that race left earlier boxes on the CDK-generated role
-          # ("pre-provisioned harness role not found"). The role IS guaranteed to
-          # exist by the time a participant runs `agentcore deploy` (Workshop
-          # Studio only grants box access after ALL stacks reach CREATE_COMPLETE),
-          # which is when the ARN is actually validated by CreateHarness. NON-FATAL.
+          # Wire harness.json to the pre-provisioned execution role (Labs 1-3).
+          # The managed-harness CDK imports executionRoleArn as-is (no auto
+          # policies), so this role carries the full set (Bedrock, InvokeGateway,
+          # OAuth2/workload identity, ECR Public, logs, X-Ray, CW metrics).
+          # Patch unconditionally: the role name is deterministic and exists by
+          # `agentcore deploy` time (a provision-time get-role gate lost a race
+          # and left boxes on the CDK-generated role). NON-FATAL.
           HARNESS_ROLE_ARN="arn:aws:iam::${AWS::AccountId}:role/workshop-harness-execution-role"
           if [ -f "$HARNESS_JSON" ]; then
             if HJ="$HARNESS_JSON" RA="$HARNESS_ROLE_ARN" python3 -c "import json,os; p=os.environ['HJ']; d=json.load(open(p)); d['executionRoleArn']=os.environ['RA']; json.dump(d, open(p,'w'), indent=2)"; then
@@ -1618,16 +1585,10 @@ Resources:
             echo "INFO: harness.json missing; CDK generates its own execution role (observability perms still included)"
           fi
 
-          # ------------------------------------------------------------------
-          # Upgrade AWS CLI v2 to the latest. AL2023 ships aws-cli ~2.33.x, which
-          # knows the `bedrock-agentcore-control` service but NOT the Agent
-          # Registry operations (create-registry/get-registry/list-registries/
-          # *-record) used by the optional Tool Registry lab AND its
-          # pre-provisioning step below. Without this, those calls fail with
-          # "invalid choice 'create-registry'". The official installer drops the
-          # new CLI at /usr/local/bin/aws (ahead of /usr/bin/aws on PATH) for both
-          # root here and the ec2-user lab terminal. NON-FATAL.
-          # ------------------------------------------------------------------
+          # Upgrade AWS CLI v2: AL2023's ~2.33.x knows bedrock-agentcore-control
+          # but NOT the Agent Registry ops (create-registry, etc.) used by the
+          # Tool Registry lab and the step below. Installs to /usr/local/bin/aws
+          # (ahead of /usr/bin on PATH). NON-FATAL.
           dnf install -y unzip >/dev/null 2>&1 || true
           if curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip; then
             (cd /tmp && unzip -q -o awscliv2.zip && (./aws/install --update || ./aws/install)) \
@@ -1639,15 +1600,9 @@ Resources:
             echo "WARN: could not download aws cli installer; Agent Registry API ops may be unavailable"
           fi
 
-          # ------------------------------------------------------------------
-          # Pre-provision the AWS Agent Registry (Optional Lab: Enterprise Tool
-          # Registry) using the SAME `aws bedrock-agentcore-control` CLI the lab
-          # uses — so registry-API support is guaranteed (no Lambda boto3 risk).
-          # Idempotent (skips if the SSM param or a same-named registry exists)
-          # and non-blocking (runs in the background; on any failure the optional
-          # self-paced lab simply skips when the SSM param is absent). Backgrounded
-          # so it adds no time to boot / cfn-signal.
-          # ------------------------------------------------------------------
+          # Pre-provision the AWS Agent Registry via the same CLI the lab uses
+          # (guaranteed API support). Idempotent + backgrounded/non-blocking;
+          # the optional lab simply skips if the SSM param is absent.
           cat > /usr/local/bin/tool-registry-provision.sh <<'SCRIPT'
           #!/bin/bash
           REGION="$1"
