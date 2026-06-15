@@ -8,7 +8,7 @@ weight: 50
 :::alert{header="Self-paced lab" type="info"}
 Do this after the live session — **your event account stays available for a limited time after the Summit**. If you're in a new terminal, run `source ~/portfolio-env.sh` to reload your environment variables.
 
-**Prerequisites:** Lab 1 (Deploy to AgentCore Runtime)
+**Prerequisites:** Lab 1 (Deploy to AgentCore Runtime). If you also completed Lab 2, the agent now requires a JWT on every invoke — Step 2 sets that up once.
 :::
 
 ## Overview
@@ -91,20 +91,37 @@ AgentCore Runtime provides built-in session isolation. Before testing it, unders
 
 Sessions are isolated — context in one session doesn't leak to another. This is critical for multi-tenant FSI applications where different clients share the same agent.
 
+:::alert{header="Set your auth mode first" type="info"}
+If you completed **Lab 2** (JWT auth), every `agentcore invoke` needs a bearer token. Run the block below once — it sets a `$BEARER` variable that the rest of this lab reuses. If you have **not** done Lab 2 yet, set `BEARER=""` instead (the invokes work without a token).
+:::
+
+:::code{language=bash}
+source ~/portfolio-env.sh
+
+TOKEN=$(aws cognito-idp initiate-auth \
+  --auth-flow USER_PASSWORD_AUTH \
+  --client-id $COGNITO_WEB_CLIENT_ID \
+  --auth-parameters USERNAME=workshopuser@example.com,PASSWORD='WorkshopPass1!' \
+  --query 'AuthenticationResult.AccessToken' --output text)
+
+BEARER="--bearer-token $TOKEN"   # completed Lab 2 (JWT enabled)
+# BEARER=""                       # have NOT done Lab 2 yet
+:::
+
 **Start Session A:**
 
 :::code{language=bash}
 SESSION_A=$(python3 -c 'import uuid; print(uuid.uuid4())')
 
 agentcore invoke "My name is Sarah and I'm interested in analyzing TSLA for a large position" \
-  --session-id $SESSION_A --stream
+  $BEARER --session-id $SESSION_A --stream
 :::
 
 **Verify Session A has context:**
 
 :::code{language=bash}
 agentcore invoke "What stock was I asking about?" \
-  --session-id $SESSION_A --stream
+  $BEARER --session-id $SESSION_A --stream
 :::
 
 Expected: The agent remembers TSLA — it has conversation history within Session A.
@@ -115,7 +132,7 @@ Expected: The agent remembers TSLA — it has conversation history within Sessio
 SESSION_B=$(python3 -c 'import uuid; print(uuid.uuid4())')
 
 agentcore invoke "What stock was I asking about?" \
-  --session-id $SESSION_B --stream
+  $BEARER --session-id $SESSION_B --stream
 :::
 
 Expected: The agent does NOT know — Session B is a completely independent conversation with no context from Session A.
@@ -136,7 +153,7 @@ Send a multi-tool query and observe how the agent selects tools:
 SESSION_TRACE=$(python3 -c 'import uuid; print(uuid.uuid4())')
 
 agentcore invoke "I want to buy 200 shares of TSLA. What's the current risk profile and what compliance rules apply for margin trading?" \
-  --session-id $SESSION_TRACE --stream
+  $BEARER --session-id $SESSION_TRACE --stream
 :::
 
 In the trace, you'll see two tool execution spans:
